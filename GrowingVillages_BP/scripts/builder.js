@@ -179,9 +179,8 @@ function gabledRoof(placer, f1, f2, s1, s2, wallTopUp, roofStairsBlock, gableBlo
  * glass windows with sills, and a pitched roof.
  */
 function houseShell(placer, f1, side, width, depth, height, mats, doorBlock) {
-  // Houses start at |side| = 3: the road occupies -1..1 and the lamp posts
-  // sit at +/-2, so anything closer would have its wall driven through a
-  // lamp post.
+  // The road occupies -2..2 and the lamp posts sit at +/-3, so |side|
+  // needs to clear that before a wall can start.
   const f2 = f1 + width - 1;
   // `side` is now the centre line of a plot. Legacy ±1 values retain the
   // original near-road positions at ±6, while explicit values such as ±10
@@ -278,7 +277,7 @@ export function buildTownHall(dimension, origin, facing) {
     roofStairs: "minecraft:stone_brick_stairs",
     gable: "minecraft:stone_bricks"
   };
-  const shape = houseShell(placer, 0, 1, 9, 9, 6, mats, "minecraft:dark_oak_door");
+  const shape = houseShell(placer, 0, 9, 9, 9, 6, mats, "minecraft:dark_oak_door");
   const inward = oppositeCardinal(shape.streetCardinal);
 
   // Bell cupola on the ridge
@@ -637,67 +636,42 @@ export function buildMinerHouse(dimension, origin, facing, plotForward, side, pa
   return shape;
 }
 
-/** Builds one vanilla-style road segment on either local axis. */
-function roadSegment(placer, f1, s1, f2, s2, centerAxis = "f") {
-  placer.box(f1, s1, -1, f2, s2, -1, "minecraft:gravel");
-  if (centerAxis === "f") {
-    const centerS = Math.round((s1 + s2) / 2);
-    placer.box(f1, centerS, -1, f2, centerS, -1, "minecraft:cobblestone");
-  } else {
-    const centerF = Math.round((f1 + f2) / 2);
-    placer.box(centerF, s1, -1, centerF, s2, -1, "minecraft:cobblestone");
-  }
-  placer.box(f1, s1, 0, f2, s2, 3, "minecraft:air");
+// The road is a single straight gravel strip along the forward axis,
+// 5 wide (side -2..2), with no centerline accent - plain gravel per the
+// vanilla-village-plot look this mod is going for.
+const ROAD_HALF_WIDTH = 2;
+
+/** Builds one straight gravel road segment along the forward axis. */
+function roadSegment(placer, f1, f2) {
+  placer.box(f1, -ROAD_HALF_WIDTH, -1, f2, ROAD_HALF_WIDTH, -1, "minecraft:gravel");
+  placer.box(f1, -ROAD_HALF_WIDTH, 0, f2, ROAD_HALF_WIDTH, 3, "minecraft:air");
 }
 
 /**
- * Extends a square village crossroads. `toForward` is the current radius;
- * each level grows both axes from the town hall, while retaining the old
- * forward-only call contract for compatibility with the level table.
+ * Extends the village's single main street. `toForward` is the current
+ * street length; each level-up grows it further from the town hall.
  *
  * `protectedRects` (local f/s rectangles, e.g. from levels.js's
  * builtPlotFootprints()) are skipped by the lamp-post lattice below. The
- * lattice is redrawn on every call across the *entire* -toForward..toForward
- * span, not just the newly extended segment, so without this it silently
- * planted a fence post and a lantern inside whichever house's wall happened
- * to land on the fixed 5-block grid - not only the town hall, which is just
- * the one case close enough to the crossroads to be guaranteed to collide.
+ * lattice is redrawn on every call across the *entire* 0..toForward span,
+ * not just the newly extended segment, so without this it would silently
+ * plant a fence post and a lantern inside whichever house's wall happened
+ * to land on the fixed 5-block grid.
  */
 export function extendPath(dimension, origin, facing, fromForward, toForward, protectedRects) {
   const placer = makePlacer(dimension, origin, facing);
   const start = Math.max(0, fromForward);
-  roadSegment(placer, start, -1, toForward, 1);
-  // The perpendicular "side" arm of the crossroad. Floor width (gravel
-  // f=-1..1, cobblestone centre line at f=0) is unchanged from the original
-  // design - crossroads.mjs checks that centre line. Only the air-clearing
-  // is narrowed to f=-1: the town hall's own houseShell call starts at
-  // f1=0, and its walls run along f=0 AND f=1 (both are within f1..f2=0..8)
-  // at s=sMin=2 and s=sMax=10. Clearing air across the full f=-1..1 band
-  // wiped straight through those wall columns on every legacy level-up from
-  // L2 to L10, since this runs unconditionally on every one of them.
-  placer.box(-1, -toForward, -1, 1, toForward, -1, "minecraft:gravel");
-  placer.box(0, -toForward, -1, 0, toForward, -1, "minecraft:cobblestone");
-  placer.box(-1, -toForward, 0, -1, toForward, 3, "minecraft:air");
-  // A compact cobblestone square makes the two road centre lines meet cleanly.
-  placer.box(-1, -1, -1, 1, 1, -1, "minecraft:cobblestone");
+  roadSegment(placer, start, toForward);
   // The lamp-post lattice below is laid on a fixed 5-block grid with no
   // idea what's been built where. Skip any post whose column falls inside
   // any already-built (or about-to-be-built) plot - always at least the
-  // town hall, which is close enough to the crossroads to collide on most
+  // town hall, which is close enough to the street to collide on most
   // level configurations, plus every plot the caller knows about.
-  const rects = protectedRects && protectedRects.length ? protectedRects : [{ fMin: -1, fMax: 9, sMin: 1, sMax: 11 }];
+  const rects = protectedRects && protectedRects.length ? protectedRects : [{ fMin: -1, fMax: 9, sMin: -13, sMax: 14 }];
   const inProtectedRect = (f, s) => rects.some(r => f >= r.fMin && f <= r.fMax && s >= r.sMin && s <= r.sMax);
-  for (let f = -toForward; f <= toForward; f += 5) {
-    for (const s of [-2, 2]) {
-      if (inProtectedRect(f, s)) continue;
-      placer.block(f, s, -1, "minecraft:cobblestone");
-      placer.block(f, s, 0, "minecraft:oak_fence");
-      placer.block(f, s, 1, "minecraft:oak_fence");
-      placer.block(f, s, 2, "minecraft:lantern", { hanging: false });
-    }
-  }
-  for (let s = -toForward; s <= toForward; s += 5) {
-    for (const f of [-2, 2]) {
+  const postS = ROAD_HALF_WIDTH + 1;
+  for (let f = 0; f <= toForward; f += 5) {
+    for (const s of [-postS, postS]) {
       if (inProtectedRect(f, s)) continue;
       placer.block(f, s, -1, "minecraft:cobblestone");
       placer.block(f, s, 0, "minecraft:oak_fence");

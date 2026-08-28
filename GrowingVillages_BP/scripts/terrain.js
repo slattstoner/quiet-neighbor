@@ -53,11 +53,35 @@ function insideAnyRect(f, s, rects) {
   return false;
 }
 
-// Logs are ignored while probing ground, but they are also the structural
-// frame of every house. Never treat them as disposable terrain inside a
-// village perimeter.
+/** Any log/stem block - a tree's trunk (or a house's log-frame corner). */
+export function isTreeLog(typeId) {
+  if (!typeId) return false;
+  return typeId.includes("_log") || typeId === "minecraft:log" ||
+         typeId === "minecraft:log2" || typeId.includes("_stem");
+}
+
+/** Tree/canopy foliage, any wood type. */
+export function isTreeLeaves(typeId) {
+  if (!typeId) return false;
+  return typeId.includes("_leaves") || typeId === "minecraft:leaves" || typeId === "minecraft:leaves2";
+}
+
+export function isTreePart(typeId) {
+  return isTreeLog(typeId) || isTreeLeaves(typeId);
+}
+
+/** Any ore block, overworld or deepslate, plus ancient debris. */
+export function isOreBlock(typeId) {
+  if (!typeId) return false;
+  return typeId.endsWith("_ore") || typeId === "minecraft:ancient_debris";
+}
+
+// A house's log-frame corners are protected from the interior sweep by
+// protectedRects/insideAnyRect (see interiorFlattenJob below), not by a
+// blanket "never touch logs" rule - so a wild tree trunk standing in
+// ground that's cleared but not yet built on is fair game.
 function isClearableNature(typeId) {
-  return isVoidOrFoliage(typeId) && !String(typeId || "").includes("log");
+  return isVoidOrFoliage(typeId) || isTreePart(typeId);
 }
 
 export function isNaturalTerrain(typeId) {
@@ -132,6 +156,13 @@ export function prepareSite(dimension, origin, facing, fMin, fMax, sMin, sMax, o
   const padding = opts.padding === undefined ? 1 : opts.padding;
   const clearHeight = opts.clearHeight === undefined ? 12 : opts.clearHeight;
   const fillDepth = opts.fillDepth === undefined ? 5 : opts.fillDepth;
+  // A mature tree's trunk/canopy can run well past clearHeight (20-30+
+  // blocks for dark oak/jungle). This second, bounded pass keeps scanning
+  // upward but only removes blocks that are actually part of a tree or an
+  // exposed ore vein, so a footprint on a wooded hillside doesn't leave a
+  // trunk poking through the finished roof - without turning into a second
+  // unconditional clear (which would be far more expensive for no benefit).
+  const treeMargin = opts.treeMargin === undefined ? 26 : opts.treeMargin;
   const surfaceBlock = opts.surfaceBlock || "minecraft:grass_block";
   const fillBlock = opts.fillBlock || fillMaterialFor(opts.surfaceType);
 
@@ -144,6 +175,14 @@ export function prepareSite(dimension, origin, facing, fMin, fMax, sMin, sMax, o
       for (let up = 0; up < clearHeight; up++) {
         const p = toWorld(origin, facing, f, s, up);
         setBlock(dimension, p.x, p.y, p.z, "minecraft:air");
+      }
+      for (let up = clearHeight; up < clearHeight + treeMargin; up++) {
+        const p = toWorld(origin, facing, f, s, up);
+        let typeId = null;
+        try { typeId = dimension.getBlock({ x: p.x, y: p.y, z: p.z })?.typeId; } catch (e) { continue; }
+        if (isTreePart(typeId) || isOreBlock(typeId)) {
+          setBlock(dimension, p.x, p.y, p.z, "minecraft:air");
+        }
       }
       // Lay the surface course, then backfill any hollow ground beneath it
       const surface = toWorld(origin, facing, f, s, -1);
@@ -234,7 +273,7 @@ function* interiorFlattenJob(dimension, origin, facing, rect, clearHeight, fillD
         const p = toWorld(origin, facing, f, s, up);
         let typeId = null;
         try { typeId = dimension.getBlock({ x: p.x, y: p.y, z: p.z })?.typeId; } catch (e) { continue; }
-        if (isNaturalTerrain(typeId) || isClearableNature(typeId)) {
+        if (isNaturalTerrain(typeId) || isClearableNature(typeId) || isOreBlock(typeId)) {
           setBlock(dimension, p.x, p.y, p.z, "minecraft:air");
         }
       }

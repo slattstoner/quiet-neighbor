@@ -222,12 +222,13 @@ console.log("\n=== progression + professions ===");
 }
 
 // ---------- N. TOWN HALL WALL SURVIVES L2/L3 ROAD-STRIP LEVELLING ----------
-// Reported live: on iPhone, levelling up to L2 sliced a horizontal band out
-// of the town hall's street-facing wall. Root cause: the town hall's near
-// wall sits at side=2 (houseShell's "near-road" branch), but the L2/L3
-// road-strip terrain pass cleared side -2..2 inclusive - two columns wider
-// than the documented street (side -1..1) - so it wiped straight through
-// that wall on every level-up whose path starts at forward 0 (L2 and L3).
+// Originally reported live: on iPhone, levelling up to L2 sliced a
+// horizontal band out of the town hall's street-facing wall, because the
+// road-strip terrain pass reached the wall. The town hall was later moved
+// further from the road (side=9, clear of the road+lamp-post band) as part
+// of switching to a single straight street, which resolves this with real
+// margin instead of a narrow band-width workaround - this test now guards
+// that margin stays real as the geometry evolves.
 {
   console.log("\n=== town hall wall survives L2/L3 levelling (reported live bug) ===");
   const player = __test__.makePlayer("WallTester", { x: 20000, y: 70, z: 20000 });
@@ -235,8 +236,8 @@ console.log("\n=== progression + professions ===");
   const elder = foundVillage(player, origin, 0);
   const state = getVillageState(elder);
 
-  // Town hall geometry from buildTownHall's houseShell(0, 1, 9, 9, 6, ...):
-  // f1=0, f2=8, sMin=2, sMax=10, height=6. Sample the near wall (sMin=2),
+  // Town hall geometry from buildTownHall's houseShell(0, 9, 9, 9, 6, ...):
+  // f1=0, f2=8, sMin=5, sMax=13, height=6. Sample the near wall (sMin=5),
   // avoiding the door bay (doorForward=4) and its lantern post.
   const nearWallSamples = [
     { f: 0, up: 3, expect: "minecraft:stripped_dark_oak_log", label: "sMin corner post" },
@@ -245,10 +246,10 @@ console.log("\n=== progression + professions ===");
     { f: 6, up: 3, expect: "minecraft:dark_oak_planks", label: "near-wall plank" },
     { f: 2, up: 0, expect: "minecraft:stone_bricks", label: "near-wall foundation trim" }
   ];
-  const farWallSample = { f: 0, s: 10, up: 3, expect: "minecraft:stripped_dark_oak_log", label: "far wall (sMax) corner post at f1" };
+  const farWallSample = { f: 0, s: 13, up: 3, expect: "minecraft:stripped_dark_oak_log", label: "far wall (sMax) corner post at f1" };
 
   for (const sample of nearWallSamples) {
-    const p = toWorld(state.origin, state.facing, sample.f, 2, sample.up);
+    const p = toWorld(state.origin, state.facing, sample.f, 5, sample.up);
     assert(blockAt(elder.dimension, p.x, p.y, p.z) === sample.expect,
       `before any level-up: town hall ${sample.label} at f=${sample.f} is intact`);
   }
@@ -268,7 +269,7 @@ console.log("\n=== progression + professions ===");
     assert(result.done && result.leveledUpTo === level, `level ${level} built (${cfg.label})`);
 
     for (const sample of nearWallSamples) {
-      const p = toWorld(state.origin, state.facing, sample.f, 2, sample.up);
+      const p = toWorld(state.origin, state.facing, sample.f, 5, sample.up);
       const actual = blockAt(elder.dimension, p.x, p.y, p.z);
       assert(actual === sample.expect,
         `after levelling to L${level}: town hall ${sample.label} at f=${sample.f} is still ${sample.expect} (got ${actual})`);

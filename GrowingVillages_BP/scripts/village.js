@@ -97,11 +97,13 @@ export function foundVillage(player, rawOrigin, facing, requestedPaletteId) {
   const palette = requestedPaletteId ? paletteById(requestedPaletteId) : paletteAt(dimension, rawOrigin);
 
   // Probe the terrain across the whole level-1 footprint and settle the
-  // village onto the median ground height.
-  const sample = sampleGroundLevel(dimension, rawOrigin, facing, -10, 14, -12, 12);
+  // village onto the median ground height. Side range covers the town
+  // hall (side 9, sMin..sMax = 5..13) and the starter house (side -9,
+  // sMin..sMax = -12..-6), each with a block of margin.
+  const sample = sampleGroundLevel(dimension, rawOrigin, facing, -10, 14, -13, 14);
   const origin = { x: rawOrigin.x, y: sample.y + 1, z: rawOrigin.z };
 
-  prepareSite(dimension, origin, facing, -10, 14, -12, 12, {
+  prepareSite(dimension, origin, facing, -10, 14, -13, 14, {
     padding: 1,
     clearHeight: 14,
     fillDepth: 6,
@@ -112,14 +114,14 @@ export function foundVillage(player, rawOrigin, facing, requestedPaletteId) {
   // Founding still happens right where the player used the bell, so this
   // small a footprint is normally already loaded - but guaranteeing it
   // costs nothing and keeps founding consistent with every later build.
-  withLoadedArea(dimension, origin, facing, { fMin: -11, fMax: 15, sMin: -13, sMax: 13 }, () => {
+  withLoadedArea(dimension, origin, facing, { fMin: -11, fMax: 15, sMin: -14, sMax: 15 }, () => {
     buildTownHall(dimension, origin, facing);
     buildCampfire(dimension, origin, facing, -6, -6);
-    buildPlainHouse(dimension, origin, facing, 0, -1, palette.id);
+    buildPlainHouse(dimension, origin, facing, 0, -9, palette.id);
   });
 
-  // Progress chest inside the town hall (walls sit at side 3 and 11)
-  const chestPos = toWorld(origin, facing, 2, 4, 0);
+  // Progress chest inside the town hall (walls sit at side 5 and 13)
+  const chestPos = toWorld(origin, facing, 2, 7, 0);
   setBlock(dimension, chestPos.x, chestPos.y, chestPos.z, "minecraft:chest");
 
   // Elder, kept firmly inside the hall. Always spawned already-adult (see
@@ -127,7 +129,7 @@ export function foundVillage(player, rawOrigin, facing, requestedPaletteId) {
   // works differently for babies, and nothing here ever checked for or
   // fixed that, so it silently spawned however Bedrock's own randomizer
   // decided.
-  const elderPos = toWorld(origin, facing, 4, 6, 0);
+  const elderPos = toWorld(origin, facing, 4, 9, 0);
   const elder = dimension.spawnEntity(VILLAGER_TYPE, { x: elderPos.x + 0.5, y: elderPos.y, z: elderPos.z + 0.5 }, ADULT_SPAWN_OPTIONS);
   elder.nameTag = coloredName("Староста", COLORS.elder);
   elder.addTag("village_elder");
@@ -163,7 +165,7 @@ export function foundVillage(player, rawOrigin, facing, requestedPaletteId) {
   }
 
   // Starter resident in the first house
-  const residentPos = toWorld(origin, facing, 3, -5, 0);
+  const residentPos = toWorld(origin, facing, 3, -8, 0);
   spawnResident(dimension, { x: residentPos.x + 0.5, y: residentPos.y, z: residentPos.z + 0.5 }, id, 5);
 
   // Notice board by the road, showing the village's name from day one
@@ -457,17 +459,15 @@ export function tryLevelUp(elder, options) {
     // passes rather than one broad sweep: a broad sweep would re-level ground
     // that earlier levels already built on and demolish those houses.
     //
-    // Pass 1 - the road strip only (never wider than the street itself, so it
-    // cannot reach the houses that stand at |side| >= 3). The street itself is
-    // side -1..1; the lamp posts at side ±2 are placed directly by extendPath()
-    // regardless of what terrain-prep does here, so this pass does not need to
-    // reach them. It previously did (-2..2), which put the town hall's own
-    // near wall (its houseShell call sits at sMin=2) inside this clearing
-    // rectangle - wiping a full band out of that wall on every L2/L3 level-up,
-    // since both levels' path segments start at forward 0, overlapping the
-    // town hall's forward 0..8 footprint.
+    // Pass 1 - the road strip only. The street itself is side -2..2; the
+    // lamp posts at side ±3 are placed directly by extendPath() regardless
+    // of what terrain-prep does here, so this pass does not need to reach
+    // them. This stays well clear of the town hall's near wall (sMin=5)
+    // and the starter house's near wall (sMax=-6), so it cannot wipe a
+    // band out of either wall on an L2/L3 level-up the way a wider pass
+    // used to when the road sat closer to those buildings.
     prepareSite(dimension, state.origin, state.facing,
-      cfg.pathFrom, cfg.pathTo, -1, 1, {
+      cfg.pathFrom, cfg.pathTo, -2, 2, {
         padding: 0,
         clearHeight: 8,
         fillDepth: 5,

@@ -1,6 +1,6 @@
 import { setBlock, toWorld } from "./util.js";
 import { makePlacer, stairs, facingBlock, placeDoor } from "./builder.js";
-import { prepareFortifiedArea, supportWallFoundation } from "./terrain.js";
+import { prepareFortifiedArea, supportWallFoundation, withRetry } from "./terrain.js";
 
 /**
  * Fortifications are rebuilt in place as the village advances, so each
@@ -65,11 +65,9 @@ function corners(rect) {
 
 /** True if this ring position is inside a gateway opening. */
 function isGateway(pos, rect, gateForward) {
-  // Every side of the square has a five-block gate aligned with one arm of
-  // the crossroads. This keeps travel possible from all four quadrants.
-  if ((pos.edge === "fMax" || pos.edge === "fMin") && Math.abs(pos.s) <= 2) return true;
-  if ((pos.edge === "sMax" || pos.edge === "sMin") && Math.abs(pos.f) <= 2) return true;
-  return false;
+  // The village has a single through-road, so the wall only opens where
+  // that road exits - the two ends (fMax/fMin), not the side edges.
+  return (pos.edge === "fMax" || pos.edge === "fMin") && Math.abs(pos.s) <= 2;
 }
 
 /** Clears the whole fortification volume so a new tier can replace the old one. */
@@ -218,7 +216,7 @@ function buildGateway(placer, rect, tier) {
   const block = spec.wallBlock;
   const accent = tier === TIER_PALISADE ? "minecraft:oak_log" : "minecraft:stone_bricks";
 
-  for (const edge of ["fMax", "fMin", "sMax", "sMin"]) {
+  for (const edge of ["fMax", "fMin"]) {
     const alongF = edge === "sMax" || edge === "sMin";
     const fixed = edge === "fMax" ? rect.fMax : edge === "fMin" ? rect.fMin : edge === "sMax" ? rect.sMax : rect.sMin;
     const at = (offset) => alongF ? { f: offset, s: fixed } : { f: fixed, s: offset };
@@ -362,6 +360,25 @@ export function buildTower(dimension, origin, facing, corner, tier) {
 }
 
 /**
+ * Re-reads each column and only re-places it if the block there doesn't
+ * already match. Reading first (rather than just blindly re-setting) is
+ * what lets an unloaded chunk still throw and drive a retry - setBlock()
+ * itself deliberately swallows that error (see util.js), which is why a
+ * ring corner sitting at the far edge of the loaded area could silently
+ * end up with no block at all, leaving a gap in the fence. Uses the same
+ * withRetry backoff already used for tower guards and gate golems.
+ */
+function verifyPlacedColumns(dimension, columns) {
+  withRetry(() => {
+    for (const c of columns) {
+      const actual = dimension.getBlock({ x: c.x, y: c.y, z: c.z }).typeId;
+      if (actual === c.typeId) continue;
+      setBlock(dimension, c.x, c.y, c.z, c.typeId, c.states);
+    }
+  });
+}
+
+/**
  * Builds (or upgrades to) a fortification tier: clears whatever ring was
  * there before, raises the new wall and puts four watchtowers on the
  * corners. Returns the tower guard positions so the caller can station
@@ -407,5 +424,35 @@ export function buildFortifications(dimension, origin, facing, maxForward, tier,
       console.warn("[village] tower build failed: " + e);
     }
   }
+
+  // The four true corners are the single furthest ring positions from
+  // wherever the level-up was triggered - the most likely to still be
+  // outside the loaded area on the first pass (see withLoadedArea's and
+  // withRetry's comments in terrain.js). Verify each one carries a wall
+  // block through the height every tier variant guarantees (palisade's
+  // "short" posts still reach spec.height - 1, so -1..spec.height - 2 is
+  // safe across all three tiers), and each tower's own corner posts
+  // through their full shaft height, retrying with backoff if not.
+  const wallColumns = [];
+  for (const c of corners(rect)) {
+    for (let up = -1; up <= spec.height - 2; up++) {
+      const p = toWorld(origin, facing, c.f, c.s, up);
+      wallColumns.push({ x: p.x, y: p.y, z: p.z, typeId: spec.wallBlock });
+    }
+  }
+  verifyPlacedColumns(dimension, wallColumns);
+
+  const towerColumns = [];
+  for (const t of towers) {
+    const shaftTop = spec.height + 4 - 2;
+    for (const [f, s] of [[t.fMin, t.sMin], [t.fMin, t.sMax], [t.fMax, t.sMin], [t.fMax, t.sMax]]) {
+      for (let up = 0; up <= shaftTop; up++) {
+        const p = toWorld(origin, facing, f, s, up);
+        towerColumns.push({ x: p.x, y: p.y, z: p.z, typeId: spec.towerPost });
+      }
+    }
+  }
+  verifyPlacedColumns(dimension, towerColumns);
+
   return { rect, towers, tier, terrain };
 }

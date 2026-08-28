@@ -212,11 +212,11 @@ export function isCityLevel(level) {
 }
 
 // The town hall, first house and campfire built at foundation time
-// (buildTownHall/buildPlainHouse(...,0,-1,...)/buildCampfire) occupy this
-// area; see builder.js's houseShell math for forward 0..8, side 2..10
-// (town hall) and forward 0..6, side -9..-3 (first house). Padded out to a
+// (buildTownHall/buildPlainHouse(...,0,-9,...)/buildCampfire) occupy this
+// area; see builder.js's houseShell math for forward 0..8, side 5..13
+// (town hall) and forward 0..6, side -12..-6 (first house). Padded out to a
 // simple box so it stays correct even if those interiors are retouched.
-const DOWNTOWN_FOOTPRINT = { fMin: -8, fMax: 10, sMin: -11, sMax: 12 };
+const DOWNTOWN_FOOTPRINT = { fMin: -8, fMax: 10, sMin: -13, sMax: 14 };
 
 /**
  * Plot footprint for a single built level, in the same local f/s
