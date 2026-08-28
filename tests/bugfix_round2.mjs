@@ -38,17 +38,18 @@ console.log("\n=== miner's house roof uses a real stairs block id ===");
 console.log("\n=== crossroads lattice skips a caller-supplied protected plot ===");
 {
   const origin = { x: -900500, y: 70, z: 0 };
-  // With toForward=23 the lattice (step 5 from -23) lands posts at
-  // ...,-3,2,7,12,17,22 along s=2. f=12 and f=17 sit inside a farmer-style
-  // plot at plotForward=12 (band f 12..18, s 2..14); f=22 does not.
+  // With toForward=23 the lattice (step 5 from 0) lands posts at
+  // 0,5,10,15,20 along s=3 (ROAD_HALF_WIDTH + 1). f=12..18 sits inside a
+  // farmer-style plot at plotForward=12 (band f 12..18, s 2..14), so f=15
+  // is skipped; f=20 does not fall in that band.
   const protectedRects = [{ fMin: 12, fMax: 18, sMin: 2, sMax: 14 }];
   extendPath(dim, origin, 0, 0, 23, protectedRects);
-  const inside = blockAt(dim, origin, 0, 12, 2, 1);
+  const inside = blockAt(dim, origin, 0, 15, 3, 1);
   assert(inside !== "minecraft:oak_fence", `lattice post skipped inside the supplied protected rect (got ${inside})`);
 
   // A position on the same grid but outside the protected rect still gets
   // its usual post, so the exclusion isn't just "nothing gets built".
-  const outside = blockAt(dim, origin, 0, 22, 2, 1);
+  const outside = blockAt(dim, origin, 0, 20, 3, 1);
   assert(outside === "minecraft:oak_fence", `lattice still posts outside the protected rect (got ${outside})`);
 }
 

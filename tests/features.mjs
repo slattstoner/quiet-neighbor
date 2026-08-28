@@ -86,6 +86,16 @@ console.log("\n=== fortification tiers ===");
       }
     }
     assert(blocked === 0, `${t.name}: main gateway is passable (${blocked} blocked cells)`);
+
+    // The village has a single street, so sMin/sMax must have no gate -
+    // the wall's center on those edges (where a crossroads gate used to
+    // open) has to be solid, not air.
+    const sMinCenter = toWorld(origin, facing, 0, rect.sMin, 0);
+    const sMaxCenter = toWorld(origin, facing, 0, rect.sMax, 0);
+    assert(blockAt(dim, sMinCenter.x, sMinCenter.y, sMinCenter.z) !== "minecraft:air",
+      `${t.name}: sMin edge has no gate (wall is solid at its center)`);
+    assert(blockAt(dim, sMaxCenter.x, sMaxCenter.y, sMaxCenter.z) !== "minecraft:air",
+      `${t.name}: sMax edge has no gate (wall is solid at its center)`);
   }
 }
 

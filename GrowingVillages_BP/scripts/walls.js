@@ -66,11 +66,9 @@ function corners(rect) {
 
 /** True if this ring position is inside a gateway opening. */
 function isGateway(pos, rect, gateForward) {
-  // Every side of the square has a five-block gate aligned with one arm of
-  // the crossroads. This keeps travel possible from all four quadrants.
-  if ((pos.edge === "fMax" || pos.edge === "fMin") && Math.abs(pos.s) <= 2) return true;
-  if ((pos.edge === "sMax" || pos.edge === "sMin") && Math.abs(pos.f) <= 2) return true;
-  return false;
+  // The village has a single through-road, so the wall only opens where
+  // that road exits - the two ends (fMax/fMin), not the side edges.
+  return (pos.edge === "fMax" || pos.edge === "fMin") && Math.abs(pos.s) <= 2;
 }
 
 // How many ring positions (or footprint columns) one job slice handles before
@@ -239,7 +237,7 @@ function buildGateway(placer, rect, tier) {
   const block = spec.wallBlock;
   const accent = tier === TIER_PALISADE ? "minecraft:oak_log" : "minecraft:stone_bricks";
 
-  for (const edge of ["fMax", "fMin", "sMax", "sMin"]) {
+  for (const edge of ["fMax", "fMin"]) {
     const alongF = edge === "sMax" || edge === "sMin";
     const fixed = edge === "fMax" ? rect.fMax : edge === "fMin" ? rect.fMin : edge === "sMax" ? rect.sMax : rect.sMin;
     const at = (offset) => alongF ? { f: offset, s: fixed } : { f: fixed, s: offset };
