@@ -1,0 +1,1181 @@
+--- a/GrowingVillages_BP/scripts/levels.js
++++ b/GrowingVillages_BP/scripts/levels.js
+@@ -7,6 +7,7 @@
+   extendPath
+ } from "./builder.js";
+ import { TIER_PALISADE, TIER_COBBLE, TIER_CASTLE } from "./walls.js";
++import { buildCityBuilding } from "./city_buildings_11_15.js";
+ 
+ /**
+  * Level 1 (town hall + campfire + first house) is built at founding and
+@@ -119,16 +120,56 @@
+     npc: null,
+     fortify: TIER_CASTLE,
+     guards: true
++  },
++  // L11–15 are real only for layoutVersion=2. Their canonical bounds and
++  // interiors stay owned by city_buildings_11_15.js / spatial_plan.js.
++  11: {
++    label: "Рыночная площадь",
++    requirements: { "minecraft:cobblestone": 192, "minecraft:oak_planks": 64, "minecraft:lantern": 12 },
++    cityBuildingId: "market_square",
++    npc: null
++  },
++  12: {
++    label: "Амбарный двор",
++    requirements: { "minecraft:wheat": 96, "minecraft:oak_log": 64, "minecraft:barrel": 8 },
++    cityBuildingId: "granary_yard",
++    npc: null
++  },
++  13: {
++    label: "Постоялый двор",
++    requirements: { "minecraft:oak_planks": 96, "minecraft:glass_pane": 24, "minecraft:iron_ingot": 20 },
++    cityBuildingId: "travellers_inn",
++    npc: null
++  },
++  14: {
++    label: "Казармы стражи",
++    requirements: { "minecraft:stone_bricks": 224, "minecraft:iron_ingot": 24, "minecraft:lantern": 16 },
++    cityBuildingId: "guard_barracks",
++    npc: null
++  },
++  15: {
++    label: "Деревенский архив",
++    requirements: { "minecraft:paper": 48, "minecraft:bookshelf": 16, "minecraft:dark_oak_planks": 64 },
++    cityBuildingId: "village_archive",
++    npc: null
+   }
+ };
+ 
++// Existing UI/chapter modules still use this legacy-safe static cap until the
++// parallel economy/UI change set merges. Village runtime uses the layout-aware
++// helper below, so new layout v2 villages can really progress to L15 now.
+ export const MAX_BETA_LEVEL = 10;
++export const MAX_LAYOUT_V2_LEVEL = 15;
++
++export function maxLevelForLayoutVersion(layoutVersion) {
++  return layoutVersion === 2 ? MAX_LAYOUT_V2_LEVEL : MAX_BETA_LEVEL;
++}
+ 
+ /** The furthest point down the street the village has built out to. */
+ export function maxForwardForLevel(level) {
+   let max = 12;
+   for (let l = 2; l <= level; l++) {
+-    if (LEVELS[l]) max = Math.max(max, LEVELS[l].plotForward);
++    if (Number.isInteger(LEVELS[l]?.plotForward)) max = Math.max(max, LEVELS[l].plotForward);
+   }
+   return max;
+ }
+@@ -158,6 +199,11 @@
+ export function runLevelBuild(dimension, origin, facing, level, paletteId) {
+   const cfg = LEVELS[level];
+   if (!cfg) return null;
++  if (cfg.cityBuildingId) return buildCityBuilding(cfg.cityBuildingId, dimension, origin, facing);
+   extendPath(dimension, origin, facing, cfg.pathFrom, cfg.pathTo);
+   return cfg.build(dimension, origin, facing, cfg.plotForward, cfg.side, paletteId);
+ }
++
++export function isCityLevel(level) {
++  return !!LEVELS[level]?.cityBuildingId;
++}
+--- a/GrowingVillages_BP/scripts/village.js
++++ b/GrowingVillages_BP/scripts/village.js
+@@ -1,13 +1,14 @@
+ import { buildTownHall, buildCampfire, buildPlainHouse, interiorCenter } from "./builder.js";
+ import { toWorld, setBlock, randomId, coloredName, COLORS } from "./util.js";
+ import { ItemStack } from "@minecraft/server";
+-import { LEVELS, MAX_BETA_LEVEL, runLevelBuild, fullVillageMaxForward } from "./levels.js";
++import { LEVELS, MAX_BETA_LEVEL, runLevelBuild, fullVillageMaxForward, isCityLevel, maxLevelForLayoutVersion } from "./levels.js";
+ import { buildFortifications, perimeterFor } from "./walls.js";
+ import { generateVillageName, updateGateSign } from "./signboard.js";
+ import { prepareSite, sampleGroundLevel } from "./terrain.js";
+ import { paletteAt, paletteById } from "./palettes.js";
+ import { spawnCraftsman, spawnResident, spawnGateGolem, spawnTowerGuard, setHome } from "./npc.js";
+ import { ensureVillageChapterState, setVillageChapterForLevel } from "./chapter_state.js";
++import { buildCityConnector } from "./city_connectors.js";
+ 
+ const PROP_LEVEL = "village:level";
+ const PROP_ORIGIN_X = "village:originX";
+@@ -18,6 +19,65 @@
+ const PROP_CHEST_Y = "village:chestY";
+ const PROP_CHEST_Z = "village:chestZ";
+ const PROP_ID = "village:id";
++const PROP_LAYOUT_VERSION = "village:layoutVersion";
++const CITY_BUILD_PREFIX = "village:v2:build:";
++
++export const LAYOUT_VERSION_V2 = 2;
++export const LEGACY_LAYOUT_MAX_ERROR = "legacy_layout_max";
++
++function buildStateKey(buildingId) {
++  return CITY_BUILD_PREFIX + buildingId;
++}
++
++function setInitialLayoutVersion(elder) {
++  const current = elder.getDynamicProperty(PROP_LAYOUT_VERSION);
++  if (current !== undefined) {
++    console.warn("[village] refusing to overwrite existing layoutVersion: " + current);
++    return false;
++  }
++  elder.setDynamicProperty(PROP_LAYOUT_VERSION, LAYOUT_VERSION_V2);
++  return true;
++}
++
++function layoutPolicy(elder) {
++  let value;
++  try {
++    value = elder.getDynamicProperty(PROP_LAYOUT_VERSION);
++  } catch (error) {
++    console.warn("[village] could not read layoutVersion: " + error);
++    return { kind: "invalid", value: undefined };
++  }
++  if (value === LAYOUT_VERSION_V2) return { kind: "v2", value };
++  if (value === undefined) return { kind: "legacy", value };
++  console.warn("[village] invalid layoutVersion; treating as legacy: " + value);
++  return { kind: "invalid", value };
++}
++
++export function getLayoutVersion(elder) {
++  const policy = layoutPolicy(elder);
++  return policy.kind === "v2" ? LAYOUT_VERSION_V2 : 1;
++}
++
++export function getCityBuildState(elder, buildingId) {
++  const value = elder.getDynamicProperty(buildStateKey(buildingId));
++  return value === 1 || value === 2 ? value : 0;
++}
++
++function setCityBuildState(elder, buildingId, state) {
++  elder.setDynamicProperty(buildStateKey(buildingId), state);
++}
++
++function isCityLayoutAllowed(elder, nextLevel) {
++  if (!isCityLevel(nextLevel)) return { ok: true };
++  const policy = layoutPolicy(elder);
++  if (policy.kind === "v2") return { ok: true };
++  return {
++    ok: false,
++    error: policy.kind === "invalid" ? "invalid_layout_version" : LEGACY_LAYOUT_MAX_ERROR,
++    layout: policy.kind,
++    value: policy.value
++  };
++}
+ 
+ /** Level at which the gate and its iron golem guards appear. */
+ export const GATE_LEVEL = 4;
+@@ -82,6 +142,9 @@
+   elder.setDynamicProperty(PROP_CHEST_X, chestPos.x);
+   elder.setDynamicProperty(PROP_CHEST_Y, chestPos.y);
+   elder.setDynamicProperty(PROP_CHEST_Z, chestPos.z);
++  // Version is written once at the same successful foundation point as core
++  // elder state. Existing elders have no key and therefore remain legacy v1.
++  setInitialLayoutVersion(elder);
+ 
+   // Chapter state is additive. A state failure must never invalidate foundation.
+   try {
+@@ -112,8 +175,9 @@
+  */
+ export function foundVillageAtLevel(player, rawOrigin, facing, targetLevel = 1, requestedPaletteId) {
+   const requested = Number(targetLevel);
+-  if (!Number.isInteger(requested) || requested < 1 || requested > MAX_BETA_LEVEL) {
+-    throw new Error(`target level must be an integer from 1 to ${MAX_BETA_LEVEL}`);
++  const targetMax = maxLevelForLayoutVersion(LAYOUT_VERSION_V2);
++  if (!Number.isInteger(requested) || requested < 1 || requested > targetMax) {
++    throw new Error(`target level must be an integer from 1 to ${targetMax}`);
+   }
+ 
+   const elder = foundVillage(player, rawOrigin, facing, requestedPaletteId);
+@@ -148,7 +212,7 @@
+     name: elder.getDynamicProperty("village:name") || "Деревня",
+     level: state.level,
+     tier: elder.getDynamicProperty("village:tier") || 0,
+-    maxLevel: MAX_BETA_LEVEL
++    maxLevel: maxLevelForLayoutVersion(state.layoutVersion)
+   });
+ }
+ 
+@@ -163,6 +227,7 @@
+     },
+     facing: elder.getDynamicProperty(PROP_FACING),
+     palette: elder.getDynamicProperty("village:palette") || "plains",
++    layoutVersion: getLayoutVersion(elder),
+     chest: {
+       x: elder.getDynamicProperty(PROP_CHEST_X),
+       y: elder.getDynamicProperty(PROP_CHEST_Y),
+@@ -197,9 +262,13 @@
+ 
+ export function chestSatisfiesRequirements(elder) {
+   const state = getVillageState(elder);
+-  const cfg = LEVELS[state.level + 1];
++  const nextLevel = state.level + 1;
++  const cfg = LEVELS[nextLevel];
+   if (!cfg) return { done: true, finished: true };
+ 
++  const layout = isCityLayoutAllowed(elder, nextLevel);
++  if (!layout.ok) return { done: false, error: layout.error, layout: layout.layout, layoutValue: layout.value };
++
+   const container = getChestContainer(elder, state);
+   if (!container) return { done: false, error: "no_chest" };
+ 
+@@ -217,6 +286,25 @@
+   return { done: true, have, container, effective };
+ }
+ 
++/** Requirement removal is the final commit step after a city build/connector succeeds. */
++function consumeRequirements(container, effective) {
++  for (const [id, count] of Object.entries(effective)) {
++    let remaining = count;
++    for (let i = 0; i < container.size && remaining > 0; i++) {
++      const stack = container.getItem(i);
++      if (!stack || stack.typeId !== id) continue;
++      const take = Math.min(remaining, stack.amount);
++      remaining -= take;
++      if (take >= stack.amount) container.setItem(i, undefined);
++      else {
++        stack.amount -= take;
++        container.setItem(i, stack);
++      }
++    }
++    if (remaining !== 0) throw new Error(`requirement commit drifted for ${id}`);
++  }
++}
++
+ /**
+  * Builds the gate: a stone archway across the street with a pair of iron
+  * golems posted either side. The golems keep their vanilla combat AI, so
+@@ -258,7 +346,76 @@
+   return golems;
+ }
+ 
+-export function tryLevelUp(elder) {
++function tryCityLevelUp(elder, state, nextLevel, cfg, check, options) {
++  const buildingId = cfg.cityBuildingId;
++  const buildState = getCityBuildState(elder, buildingId);
++  if (buildState === 2) {
++    // A completed flag combined with an unadvanced level is corrupted state;
++    // never guess or construct a duplicate building.
++    return { done: false, error: "city_build_state_mismatch", buildingId };
++  }
++  if (buildState === 1) {
++    // A prior synchronous build interruption is recoverable. Clear the queue
++    // without charging resources; the player may explicitly retry afterwards.
++    try {
++      setCityBuildState(elder, buildingId, 0);
++      return { done: false, error: "city_build_recovered", buildingId, recovered: true };
++    } catch (error) {
++      return { done: false, error: "city_build_recovery_failed", buildingId };
++    }
++  }
++
++  try {
++    setCityBuildState(elder, buildingId, 1);
++  } catch (error) {
++    return { done: false, error: "city_build_queue_failed", buildingId };
++  }
++
++  let shape;
++  let connector;
++  try {
++    const build = options?.runLevelBuild || runLevelBuild;
++    const connect = options?.buildCityConnector || buildCityConnector;
++    shape = build(elder.dimension, state.origin, state.facing, nextLevel, state.palette);
++    if (!shape || shape.buildingId !== buildingId) throw new Error("city builder returned wrong metadata");
++    connector = connect(elder.dimension, state.origin, state.facing, shape);
++  } catch (error) {
++    console.warn("[village] city build pipeline failed: " + error);
++    try { setCityBuildState(elder, buildingId, 0); } catch (resetError) {
++      console.warn("[village] city build recovery reset failed: " + resetError);
++    }
++    return { done: false, error: "city_build_failed", buildingId, recoverable: true };
++  }
++
++  // The checks and removal happen in the same single-threaded level action;
++  // resource commit is deliberately after builder and narrow connector success.
++  try {
++    consumeRequirements(check.container, check.effective);
++  } catch (error) {
++    console.warn("[village] city requirement commit failed: " + error);
++    return { done: false, error: "city_commit_failed", buildingId };
++  }
++
++  elder.setDynamicProperty(PROP_LEVEL, nextLevel);
++  try { setCityBuildState(elder, buildingId, 2); } catch (error) {
++    // The level is already committed; never retry a completed physical build.
++    console.warn("[village] city completion marker write failed: " + error);
++  }
++
++  let chapterId = null;
++  try {
++    const chapterState = setVillageChapterForLevel(elder, nextLevel);
++    chapterId = chapterState.ok ? chapterState.chapterId : null;
++  } catch (error) {
++    console.warn("[village] chapter state update failed: " + error);
++  }
++  try { refreshSign(elder); } catch (error) {
++    console.warn("[village] sign refresh failed: " + error);
++  }
++  return { done: true, leveledUpTo: nextLevel, label: cfg.label, shape, connector, chapterId, cityBuildingId: buildingId };
++}
++
++export function tryLevelUp(elder, options) {
+   const check = chestSatisfiesRequirements(elder);
+   if (!check.done || check.finished) return check;
+ 
+@@ -267,21 +424,10 @@
+   const cfg = LEVELS[nextLevel];
+   const container = check.container;
+ 
+-  for (const [id, count] of Object.entries(check.effective)) {
+-    let remaining = count;
+-    for (let i = 0; i < container.size && remaining > 0; i++) {
+-      const stack = container.getItem(i);
+-      if (!stack || stack.typeId !== id) continue;
+-      const take = Math.min(remaining, stack.amount);
+-      remaining -= take;
+-      if (take >= stack.amount) {
+-        container.setItem(i, undefined);
+-      } else {
+-        stack.amount -= take;
+-        container.setItem(i, stack);
+-      }
+-    }
+-  }
++  if (isCityLevel(nextLevel)) return tryCityLevelUp(elder, state, nextLevel, cfg, check, options);
++
++  // Preserve the established L1–10 transaction ordering and geometry.
++  consumeRequirements(container, check.effective);
+ 
+   const dimension = elder.dimension;
+ 
+@@ -408,9 +554,10 @@
+ 
+ export function effectiveRequirementsText(elder) {
+   const state = getVillageState(elder);
++  const maxLevel = maxLevelForLayoutVersion(state.layoutVersion);
+   const nextLevel = state.level + 1;
+   const cfg = LEVELS[nextLevel];
+-  if (!cfg) return `Деревня достигла максимума этой бета-версии (уровень ${state.level} из ${MAX_BETA_LEVEL}). Следующие уровни появятся в будущих обновлениях мода.`;
++  if (!cfg || nextLevel > maxLevel) return `Деревня достигла максимума этой бета-версии (уровень ${state.level} из ${maxLevel}). Следующие уровни появятся в будущих обновлениях мода.`;
+   const effective = getEffectiveRequirements(elder, nextLevel);
+   const lines = Object.entries(effective).map(([id, count]) => `- ${id.replace("minecraft:", "")}: ${count}`);
+   return `Уровень деревни: ${state.level}\nСледующая постройка: "${cfg.label}"\nПринесите в сундук ратуши:\n${lines.join("\n")}`;
+--- a/tests/scripts/levels.js
++++ b/tests/scripts/levels.js
+@@ -7,6 +7,7 @@
+   extendPath
+ } from "./builder.js";
+ import { TIER_PALISADE, TIER_COBBLE, TIER_CASTLE } from "./walls.js";
++import { buildCityBuilding } from "./city_buildings_11_15.js";
+ 
+ /**
+  * Level 1 (town hall + campfire + first house) is built at founding and
+@@ -119,16 +120,56 @@
+     npc: null,
+     fortify: TIER_CASTLE,
+     guards: true
++  },
++  // L11–15 are real only for layoutVersion=2. Their canonical bounds and
++  // interiors stay owned by city_buildings_11_15.js / spatial_plan.js.
++  11: {
++    label: "Рыночная площадь",
++    requirements: { "minecraft:cobblestone": 192, "minecraft:oak_planks": 64, "minecraft:lantern": 12 },
++    cityBuildingId: "market_square",
++    npc: null
++  },
++  12: {
++    label: "Амбарный двор",
++    requirements: { "minecraft:wheat": 96, "minecraft:oak_log": 64, "minecraft:barrel": 8 },
++    cityBuildingId: "granary_yard",
++    npc: null
++  },
++  13: {
++    label: "Постоялый двор",
++    requirements: { "minecraft:oak_planks": 96, "minecraft:glass_pane": 24, "minecraft:iron_ingot": 20 },
++    cityBuildingId: "travellers_inn",
++    npc: null
++  },
++  14: {
++    label: "Казармы стражи",
++    requirements: { "minecraft:stone_bricks": 224, "minecraft:iron_ingot": 24, "minecraft:lantern": 16 },
++    cityBuildingId: "guard_barracks",
++    npc: null
++  },
++  15: {
++    label: "Деревенский архив",
++    requirements: { "minecraft:paper": 48, "minecraft:bookshelf": 16, "minecraft:dark_oak_planks": 64 },
++    cityBuildingId: "village_archive",
++    npc: null
+   }
+ };
+ 
++// Existing UI/chapter modules still use this legacy-safe static cap until the
++// parallel economy/UI change set merges. Village runtime uses the layout-aware
++// helper below, so new layout v2 villages can really progress to L15 now.
+ export const MAX_BETA_LEVEL = 10;
++export const MAX_LAYOUT_V2_LEVEL = 15;
++
++export function maxLevelForLayoutVersion(layoutVersion) {
++  return layoutVersion === 2 ? MAX_LAYOUT_V2_LEVEL : MAX_BETA_LEVEL;
++}
+ 
+ /** The furthest point down the street the village has built out to. */
+ export function maxForwardForLevel(level) {
+   let max = 12;
+   for (let l = 2; l <= level; l++) {
+-    if (LEVELS[l]) max = Math.max(max, LEVELS[l].plotForward);
++    if (Number.isInteger(LEVELS[l]?.plotForward)) max = Math.max(max, LEVELS[l].plotForward);
+   }
+   return max;
+ }
+@@ -158,6 +199,11 @@
+ export function runLevelBuild(dimension, origin, facing, level, paletteId) {
+   const cfg = LEVELS[level];
+   if (!cfg) return null;
++  if (cfg.cityBuildingId) return buildCityBuilding(cfg.cityBuildingId, dimension, origin, facing);
+   extendPath(dimension, origin, facing, cfg.pathFrom, cfg.pathTo);
+   return cfg.build(dimension, origin, facing, cfg.plotForward, cfg.side, paletteId);
+ }
++
++export function isCityLevel(level) {
++  return !!LEVELS[level]?.cityBuildingId;
++}
+--- a/tests/scripts/village.js
++++ b/tests/scripts/village.js
+@@ -1,13 +1,14 @@
+ import { buildTownHall, buildCampfire, buildPlainHouse, interiorCenter } from "./builder.js";
+ import { toWorld, setBlock, randomId, coloredName, COLORS } from "./util.js";
+ import { ItemStack } from "@minecraft/server";
+-import { LEVELS, MAX_BETA_LEVEL, runLevelBuild, fullVillageMaxForward } from "./levels.js";
++import { LEVELS, MAX_BETA_LEVEL, runLevelBuild, fullVillageMaxForward, isCityLevel, maxLevelForLayoutVersion } from "./levels.js";
+ import { buildFortifications, perimeterFor } from "./walls.js";
+ import { generateVillageName, updateGateSign } from "./signboard.js";
+ import { prepareSite, sampleGroundLevel } from "./terrain.js";
+ import { paletteAt, paletteById } from "./palettes.js";
+ import { spawnCraftsman, spawnResident, spawnGateGolem, spawnTowerGuard, setHome } from "./npc.js";
+ import { ensureVillageChapterState, setVillageChapterForLevel } from "./chapter_state.js";
++import { buildCityConnector } from "./city_connectors.js";
+ 
+ const PROP_LEVEL = "village:level";
+ const PROP_ORIGIN_X = "village:originX";
+@@ -18,6 +19,65 @@
+ const PROP_CHEST_Y = "village:chestY";
+ const PROP_CHEST_Z = "village:chestZ";
+ const PROP_ID = "village:id";
++const PROP_LAYOUT_VERSION = "village:layoutVersion";
++const CITY_BUILD_PREFIX = "village:v2:build:";
++
++export const LAYOUT_VERSION_V2 = 2;
++export const LEGACY_LAYOUT_MAX_ERROR = "legacy_layout_max";
++
++function buildStateKey(buildingId) {
++  return CITY_BUILD_PREFIX + buildingId;
++}
++
++function setInitialLayoutVersion(elder) {
++  const current = elder.getDynamicProperty(PROP_LAYOUT_VERSION);
++  if (current !== undefined) {
++    console.warn("[village] refusing to overwrite existing layoutVersion: " + current);
++    return false;
++  }
++  elder.setDynamicProperty(PROP_LAYOUT_VERSION, LAYOUT_VERSION_V2);
++  return true;
++}
++
++function layoutPolicy(elder) {
++  let value;
++  try {
++    value = elder.getDynamicProperty(PROP_LAYOUT_VERSION);
++  } catch (error) {
++    console.warn("[village] could not read layoutVersion: " + error);
++    return { kind: "invalid", value: undefined };
++  }
++  if (value === LAYOUT_VERSION_V2) return { kind: "v2", value };
++  if (value === undefined) return { kind: "legacy", value };
++  console.warn("[village] invalid layoutVersion; treating as legacy: " + value);
++  return { kind: "invalid", value };
++}
++
++export function getLayoutVersion(elder) {
++  const policy = layoutPolicy(elder);
++  return policy.kind === "v2" ? LAYOUT_VERSION_V2 : 1;
++}
++
++export function getCityBuildState(elder, buildingId) {
++  const value = elder.getDynamicProperty(buildStateKey(buildingId));
++  return value === 1 || value === 2 ? value : 0;
++}
++
++function setCityBuildState(elder, buildingId, state) {
++  elder.setDynamicProperty(buildStateKey(buildingId), state);
++}
++
++function isCityLayoutAllowed(elder, nextLevel) {
++  if (!isCityLevel(nextLevel)) return { ok: true };
++  const policy = layoutPolicy(elder);
++  if (policy.kind === "v2") return { ok: true };
++  return {
++    ok: false,
++    error: policy.kind === "invalid" ? "invalid_layout_version" : LEGACY_LAYOUT_MAX_ERROR,
++    layout: policy.kind,
++    value: policy.value
++  };
++}
+ 
+ /** Level at which the gate and its iron golem guards appear. */
+ export const GATE_LEVEL = 4;
+@@ -82,6 +142,9 @@
+   elder.setDynamicProperty(PROP_CHEST_X, chestPos.x);
+   elder.setDynamicProperty(PROP_CHEST_Y, chestPos.y);
+   elder.setDynamicProperty(PROP_CHEST_Z, chestPos.z);
++  // Version is written once at the same successful foundation point as core
++  // elder state. Existing elders have no key and therefore remain legacy v1.
++  setInitialLayoutVersion(elder);
+ 
+   // Chapter state is additive. A state failure must never invalidate foundation.
+   try {
+@@ -112,8 +175,9 @@
+  */
+ export function foundVillageAtLevel(player, rawOrigin, facing, targetLevel = 1, requestedPaletteId) {
+   const requested = Number(targetLevel);
+-  if (!Number.isInteger(requested) || requested < 1 || requested > MAX_BETA_LEVEL) {
+-    throw new Error(`target level must be an integer from 1 to ${MAX_BETA_LEVEL}`);
++  const targetMax = maxLevelForLayoutVersion(LAYOUT_VERSION_V2);
++  if (!Number.isInteger(requested) || requested < 1 || requested > targetMax) {
++    throw new Error(`target level must be an integer from 1 to ${targetMax}`);
+   }
+ 
+   const elder = foundVillage(player, rawOrigin, facing, requestedPaletteId);
+@@ -148,7 +212,7 @@
+     name: elder.getDynamicProperty("village:name") || "Деревня",
+     level: state.level,
+     tier: elder.getDynamicProperty("village:tier") || 0,
+-    maxLevel: MAX_BETA_LEVEL
++    maxLevel: maxLevelForLayoutVersion(state.layoutVersion)
+   });
+ }
+ 
+@@ -163,6 +227,7 @@
+     },
+     facing: elder.getDynamicProperty(PROP_FACING),
+     palette: elder.getDynamicProperty("village:palette") || "plains",
++    layoutVersion: getLayoutVersion(elder),
+     chest: {
+       x: elder.getDynamicProperty(PROP_CHEST_X),
+       y: elder.getDynamicProperty(PROP_CHEST_Y),
+@@ -197,9 +262,13 @@
+ 
+ export function chestSatisfiesRequirements(elder) {
+   const state = getVillageState(elder);
+-  const cfg = LEVELS[state.level + 1];
++  const nextLevel = state.level + 1;
++  const cfg = LEVELS[nextLevel];
+   if (!cfg) return { done: true, finished: true };
+ 
++  const layout = isCityLayoutAllowed(elder, nextLevel);
++  if (!layout.ok) return { done: false, error: layout.error, layout: layout.layout, layoutValue: layout.value };
++
+   const container = getChestContainer(elder, state);
+   if (!container) return { done: false, error: "no_chest" };
+ 
+@@ -217,6 +286,25 @@
+   return { done: true, have, container, effective };
+ }
+ 
++/** Requirement removal is the final commit step after a city build/connector succeeds. */
++function consumeRequirements(container, effective) {
++  for (const [id, count] of Object.entries(effective)) {
++    let remaining = count;
++    for (let i = 0; i < container.size && remaining > 0; i++) {
++      const stack = container.getItem(i);
++      if (!stack || stack.typeId !== id) continue;
++      const take = Math.min(remaining, stack.amount);
++      remaining -= take;
++      if (take >= stack.amount) container.setItem(i, undefined);
++      else {
++        stack.amount -= take;
++        container.setItem(i, stack);
++      }
++    }
++    if (remaining !== 0) throw new Error(`requirement commit drifted for ${id}`);
++  }
++}
++
+ /**
+  * Builds the gate: a stone archway across the street with a pair of iron
+  * golems posted either side. The golems keep their vanilla combat AI, so
+@@ -258,7 +346,76 @@
+   return golems;
+ }
+ 
+-export function tryLevelUp(elder) {
++function tryCityLevelUp(elder, state, nextLevel, cfg, check, options) {
++  const buildingId = cfg.cityBuildingId;
++  const buildState = getCityBuildState(elder, buildingId);
++  if (buildState === 2) {
++    // A completed flag combined with an unadvanced level is corrupted state;
++    // never guess or construct a duplicate building.
++    return { done: false, error: "city_build_state_mismatch", buildingId };
++  }
++  if (buildState === 1) {
++    // A prior synchronous build interruption is recoverable. Clear the queue
++    // without charging resources; the player may explicitly retry afterwards.
++    try {
++      setCityBuildState(elder, buildingId, 0);
++      return { done: false, error: "city_build_recovered", buildingId, recovered: true };
++    } catch (error) {
++      return { done: false, error: "city_build_recovery_failed", buildingId };
++    }
++  }
++
++  try {
++    setCityBuildState(elder, buildingId, 1);
++  } catch (error) {
++    return { done: false, error: "city_build_queue_failed", buildingId };
++  }
++
++  let shape;
++  let connector;
++  try {
++    const build = options?.runLevelBuild || runLevelBuild;
++    const connect = options?.buildCityConnector || buildCityConnector;
++    shape = build(elder.dimension, state.origin, state.facing, nextLevel, state.palette);
++    if (!shape || shape.buildingId !== buildingId) throw new Error("city builder returned wrong metadata");
++    connector = connect(elder.dimension, state.origin, state.facing, shape);
++  } catch (error) {
++    console.warn("[village] city build pipeline failed: " + error);
++    try { setCityBuildState(elder, buildingId, 0); } catch (resetError) {
++      console.warn("[village] city build recovery reset failed: " + resetError);
++    }
++    return { done: false, error: "city_build_failed", buildingId, recoverable: true };
++  }
++
++  // The checks and removal happen in the same single-threaded level action;
++  // resource commit is deliberately after builder and narrow connector success.
++  try {
++    consumeRequirements(check.container, check.effective);
++  } catch (error) {
++    console.warn("[village] city requirement commit failed: " + error);
++    return { done: false, error: "city_commit_failed", buildingId };
++  }
++
++  elder.setDynamicProperty(PROP_LEVEL, nextLevel);
++  try { setCityBuildState(elder, buildingId, 2); } catch (error) {
++    // The level is already committed; never retry a completed physical build.
++    console.warn("[village] city completion marker write failed: " + error);
++  }
++
++  let chapterId = null;
++  try {
++    const chapterState = setVillageChapterForLevel(elder, nextLevel);
++    chapterId = chapterState.ok ? chapterState.chapterId : null;
++  } catch (error) {
++    console.warn("[village] chapter state update failed: " + error);
++  }
++  try { refreshSign(elder); } catch (error) {
++    console.warn("[village] sign refresh failed: " + error);
++  }
++  return { done: true, leveledUpTo: nextLevel, label: cfg.label, shape, connector, chapterId, cityBuildingId: buildingId };
++}
++
++export function tryLevelUp(elder, options) {
+   const check = chestSatisfiesRequirements(elder);
+   if (!check.done || check.finished) return check;
+ 
+@@ -267,21 +424,10 @@
+   const cfg = LEVELS[nextLevel];
+   const container = check.container;
+ 
+-  for (const [id, count] of Object.entries(check.effective)) {
+-    let remaining = count;
+-    for (let i = 0; i < container.size && remaining > 0; i++) {
+-      const stack = container.getItem(i);
+-      if (!stack || stack.typeId !== id) continue;
+-      const take = Math.min(remaining, stack.amount);
+-      remaining -= take;
+-      if (take >= stack.amount) {
+-        container.setItem(i, undefined);
+-      } else {
+-        stack.amount -= take;
+-        container.setItem(i, stack);
+-      }
+-    }
+-  }
++  if (isCityLevel(nextLevel)) return tryCityLevelUp(elder, state, nextLevel, cfg, check, options);
++
++  // Preserve the established L1–10 transaction ordering and geometry.
++  consumeRequirements(container, check.effective);
+ 
+   const dimension = elder.dimension;
+ 
+@@ -408,9 +554,10 @@
+ 
+ export function effectiveRequirementsText(elder) {
+   const state = getVillageState(elder);
++  const maxLevel = maxLevelForLayoutVersion(state.layoutVersion);
+   const nextLevel = state.level + 1;
+   const cfg = LEVELS[nextLevel];
+-  if (!cfg) return `Деревня достигла максимума этой бета-версии (уровень ${state.level} из ${MAX_BETA_LEVEL}). Следующие уровни появятся в будущих обновлениях мода.`;
++  if (!cfg || nextLevel > maxLevel) return `Деревня достигла максимума этой бета-версии (уровень ${state.level} из ${maxLevel}). Следующие уровни появятся в будущих обновлениях мода.`;
+   const effective = getEffectiveRequirements(elder, nextLevel);
+   const lines = Object.entries(effective).map(([id, count]) => `- ${id.replace("minecraft:", "")}: ${count}`);
+   return `Уровень деревни: ${state.level}\nСледующая постройка: "${cfg.label}"\nПринесите в сундук ратуши:\n${lines.join("\n")}`;
+--- a/tests/chapter_state.mjs
++++ b/tests/chapter_state.mjs
+@@ -58,12 +58,16 @@
+     `level ${level} opens ${nextId}`);
+ }
+ 
+-console.log("\n=== failed and terminal transitions ===");
++console.log("\n=== failed and legacy-terminal transitions ===");
++// This chapter-owner regression remains scoped to the unchanged L1–10
++// chapter adapter. A keyless elder is legacy, so L10 is blocked safely rather
++// than silently entering architecture-owned city progression.
++elder.setDynamicProperty("village:layoutVersion", undefined);
+ const finalChapter = getVillageChapterState(elder);
+ const terminal = tryLevelUp(elder);
+-assert(terminal.done && terminal.finished, "level 10 remains the terminal actual progression level");
++assert(!terminal.done && terminal.error === "legacy_layout_max", "legacy level 10 remains safely capped without chapter activation");
+ assert(JSON.stringify(getVillageChapterState(elder)) === JSON.stringify(finalChapter),
+-  "terminal level-up attempt leaves chapter state unchanged");
++  "legacy-terminal level-up attempt leaves chapter state unchanged");
+ 
+ const emptyPlayer = __test__.makePlayer("EmptyChestTester", { x: 140000, y: 70, z: 140000 });
+ emptyPlayer.dimension = dim;
+--- a/tests/integration.mjs
++++ b/tests/integration.mjs
+@@ -56,7 +56,10 @@
+ 
+   const result = tryLevelUp(elder);
+   assert(result.done, `level ${level}: built successfully`);
+-  if (result.shape) builtShapes.push({ label: `level${level} ${cfg.label}`, shape: result.shape });
++  // This legacy structural regression owns L2–10 house-shape assertions.
++  // L11–15 expose city metadata rather than house-shape fields and are
++  // exhaustively validated by city_progression_11_15.mjs.
++  if (result.shape && level <= 10) builtShapes.push({ label: `level${level} ${cfg.label}`, shape: result.shape });
+ }
+ 
+ // Every building erected earlier must still be intact after all the
+--- a/tests/progression_guard.mjs
++++ b/tests/progression_guard.mjs
+@@ -1,6 +1,6 @@
+ import { readFileSync } from "node:fs";
+ import { fileURLToPath } from "node:url";
+-import { LEVELS, MAX_BETA_LEVEL, maxForwardForLevel } from "./scripts/levels.js";
++import { LEVELS, MAX_BETA_LEVEL, MAX_LAYOUT_V2_LEVEL, isCityLevel, maxForwardForLevel, maxLevelForLayoutVersion } from "./scripts/levels.js";
+ import {
+   RUNTIME_CHAPTER_MAX_LEVEL,
+   chapterForVillageLevel,
+@@ -12,54 +12,54 @@
+   if (!condition) {
+     failures++;
+     console.error("FAIL:", message);
+-  } else {
+-    console.log("ok:", message);
+-  }
++  } else console.log("ok:", message);
+ }
+ 
+ function importedModuleSpecifiers(relativePath) {
+   const source = readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), "utf8");
+-  return [...source.matchAll(/\bimport\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/g)]
+-    .map((match) => match[1]);
++  return [...source.matchAll(/\bimport\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/g)].map((match) => match[1]);
+ }
+ 
+-console.log("\n=== current progression contract ===");
+-assert(MAX_BETA_LEVEL === 10, "actual runtime maximum level remains 10");
++console.log("\n=== v2 progression contract ===");
++assert(MAX_BETA_LEVEL === 10, "legacy/chapter static cap remains 10 pending the parallel UI merge");
++assert(MAX_LAYOUT_V2_LEVEL === 15 && maxLevelForLayoutVersion(2) === 15 && maxLevelForLayoutVersion(1) === 10,
++  "layout-aware runtime admits L15 only for explicit v2 villages");
+ const buildLevels = Object.keys(LEVELS).map(Number).sort((a, b) => a - b);
+-assert(JSON.stringify(buildLevels) === JSON.stringify([2, 3, 4, 5, 6, 7, 8, 9, 10]),
+-  "LEVELS contains only actual build levels 2 through 10");
+-assert(!buildLevels.some((level) => level >= 11), "future contract levels are absent from actual build runtime");
++assert(JSON.stringify(buildLevels) === JSON.stringify([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
++  "LEVELS contains every actual build level 2 through 15");
++const expectedCity = ["market_square", "granary_yard", "travellers_inn", "guard_barracks", "village_archive"];
++assert(JSON.stringify([11, 12, 13, 14, 15].map((level) => LEVELS[level].cityBuildingId)) === JSON.stringify(expectedCity),
++  "L11–15 retain canonical city building IDs");
++assert([11, 12, 13, 14, 15].every(isCityLevel) && !isCityLevel(10), "only L11–15 take city builder path");
+ 
+-console.log("\n=== legacy forward geometry ===");
++console.log("\n=== legacy forward geometry remains bounded ===");
+ const expectedForward = new Map([
+   [1, 12], [2, 12], [3, 12], [4, 12], [5, 12],
+-  [6, 12], [7, 12], [8, 26], [9, 26], [10, 38]
++  [6, 12], [7, 12], [8, 26], [9, 26], [10, 38],
++  [11, 38], [12, 38], [13, 38], [14, 38], [15, 38]
+ ]);
+-for (const [level, expected] of expectedForward) {
+-  assert(maxForwardForLevel(level) === expected, `legacy maxForward L${level} remains ${expected}`);
+-}
+-assert(maxForwardForLevel(10) === 38 && maxForwardForLevel(10) < 94,
+-  "runtime forward extent does not include future R94 city walls or roads");
+-
+-console.log("\n=== city and chapter isolation ===");
+-for (const path of ["./scripts/levels.js", "./scripts/village.js", "./scripts/main.js"]) {
+-  const imports = importedModuleSpecifiers(path);
+-  assert(!imports.includes("./city_buildings_11_15.js"), `${path} does not import city_buildings_11_15.js`);
+-}
+-assert(RUNTIME_CHAPTER_MAX_LEVEL === 10, "chapter runtime guard remains at level 10");
+-assert(chapterForVillageLevel(11) === "chapter.11.market_day", "chapter data can still describe future level 11");
++for (const [level, expected] of expectedForward) assert(maxForwardForLevel(level) === expected, `maxForward L${level} remains ${expected}`);
++assert(maxForwardForLevel(15) === 38 && maxForwardForLevel(15) < 94,
++  "city runtime does not activate final R94 roads or defensive stages");
++
++console.log("\n=== module ownership and chapter handoff ===");
++const levelImports = importedModuleSpecifiers("./scripts/levels.js");
++const villageImports = importedModuleSpecifiers("./scripts/village.js");
++const mainImports = importedModuleSpecifiers("./scripts/main.js");
++assert(levelImports.includes("./city_buildings_11_15.js"), "levels owns the approved city-builder routing");
++assert(villageImports.includes("./city_connectors.js"), "village owns narrow connector transaction wiring");
++assert(!mainImports.includes("./city_buildings_11_15.js") && !mainImports.includes("./defences_roads.js"), "main does not directly activate city or defence builders");
++assert(RUNTIME_CHAPTER_MAX_LEVEL === 10, "parallel chapter owner remains unchanged in this architecture-only change set");
++assert(chapterForVillageLevel(11) === "chapter.11.market_day", "chapter data already describes level 11 for the parallel merge");
+ let writes = 0;
+-const noFutureRuntime = {
+-  getDynamicProperty() { return undefined; },
+-  setDynamicProperty() { writes++; }
+-};
+-const futureResult = setVillageChapterForLevel(noFutureRuntime, 11);
+-assert(!futureResult.ok && futureResult.reason === "unsupported_runtime_level", "normal runtime refuses to activate chapter above level 10");
+-assert(writes === 0, "future chapter refusal produces no dynamic-property write");
+-
+-console.log("\n=== no world side effects ===");
+-assert(typeof LEVELS === "object" && typeof maxForwardForLevel === "function",
+-  "guard uses only imported data and pure helpers, not world, production, NPC or builders");
++const preMergeChapter = { getDynamicProperty() { return undefined; }, setDynamicProperty() { writes++; } };
++const futureResult = setVillageChapterForLevel(preMergeChapter, 11);
++assert(!futureResult.ok && futureResult.reason === "unsupported_runtime_level", "pre-merge chapter adapter remains neutral above its owned cap");
++assert(writes === 0, "pre-merge chapter refusal produces no dynamic-property write");
++
++console.log("\n=== no world side effects in data guard ===");
++assert(typeof LEVELS === "object" && typeof maxForwardForLevel === "function" && typeof isCityLevel === "function",
++  "guard uses imported data/pure helpers and does not touch world, production or NPC economy");
+ 
+ console.log(failures === 0 ? "\nALL PROGRESSION GUARD TESTS PASSED" : `\n${failures} PROGRESSION GUARD TEST(S) FAILED`);
+ process.exit(failures === 0 ? 0 : 1);
+--- a/tests/run.mjs
++++ b/tests/run.mjs
+@@ -75,9 +75,11 @@
+   assert(leftovers.length === 0, `level ${level}: chest was fully consumed`);
+ }
+ 
+-// One level past the cap: should report "finished" cleanly, not crash
++// The legacy regression builds through its static L10 cap. A newly founded
++// v2 village may continue only through the separately tested, resource-gated
++// city path; it must not auto-build or crash at this boundary.
+ const past = chestSatisfiesRequirements(elder);
+-assert(past.finished === true, "past max beta level reports finished, no crash");
++assert(!past.done && !past.finished, "v2 level 10 exposes a controlled L11 requirement path without auto-build");
+ console.log(effectiveRequirementsText(elder));
+ 
+ // --- Test 4: quest chains reward the player, track progress on the NPC, and discount only fires once the chain finishes ---
+--- a/GrowingVillages_BP/scripts/city_connectors.js
++++ b/GrowingVillages_BP/scripts/city_connectors.js
+@@ -0,0 +1,80 @@
++import { ROAD_AXES } from "./spatial_plan.js";
++import { prepareSite } from "./terrain.js";
++import { makePlacer } from "./builder.js";
++
++/**
++ * Narrow, detached city pedestrian connectors.
++ *
++ * A city builder returns an `approach` corridor rather than paving public
++ * space itself. This module consumes that metadata only after a successful
++ * city build. It never creates a final R94 crossroad or touches defences.
++ */
++
++function cloneBounds(bounds) {
++  return { fMin: bounds.fMin, fMax: bounds.fMax, sMin: bounds.sMin, sMax: bounds.sMax };
++}
++
++function widthOf(bounds, axis) {
++  return axis === "forward"
++    ? Math.abs(bounds.fMax - bounds.fMin) + 1
++    : Math.abs(bounds.sMax - bounds.sMin) + 1;
++}
++
++function isValidApproach(approach) {
++  if (!approach || (approach.axis !== "forward" && approach.axis !== "side")) return false;
++  const bounds = approach.bounds;
++  return !!bounds && [bounds.fMin, bounds.fMax, bounds.sMin, bounds.sMax].every(Number.isInteger) &&
++    bounds.fMin <= bounds.fMax && bounds.sMin <= bounds.sMax &&
++    Number.isInteger(approach.width) && approach.width >= 2;
++}
++
++/** Pure preflight. It rejects malformed metadata before any terrain edit. */
++export function connectorPlanFor(metadata) {
++  if (!metadata || typeof metadata.buildingId !== "string") throw new Error("city metadata is required");
++  const approach = metadata.approach;
++  if (!isValidApproach(approach)) throw new Error(`invalid city approach: ${metadata.buildingId}`);
++  const road = ROAD_AXES[approach.axis];
++  if (!road || road.width !== 3) throw new Error(`missing canonical road axis: ${approach.axis}`);
++  if (widthOf(approach.bounds, approach.axis) < 2) throw new Error(`approach is narrower than two blocks: ${metadata.buildingId}`);
++
++  // City metadata deliberately stops immediately beside the canonical road
++  // band so the building module does not pave public space itself. Adjacency
++  // therefore counts as a valid connection; the connector never widens into
++  // the three-block road strip.
++  const joinsRoad = approach.axis === "forward"
++    ? (approach.bounds.sMin <= road.bounds.sMax + 1 && approach.bounds.sMax >= road.bounds.sMin - 1)
++    : (approach.bounds.fMin <= road.bounds.fMax + 1 && approach.bounds.fMax >= road.bounds.fMin - 1);
++  if (!joinsRoad) throw new Error(`approach does not reach central road band: ${metadata.buildingId}`);
++
++  return Object.freeze({
++    buildingId: metadata.buildingId,
++    axis: approach.axis,
++    width: approach.width,
++    bounds: Object.freeze(cloneBounds(approach.bounds)),
++    roadBounds: Object.freeze(cloneBounds(road.bounds)),
++    entryPath: Object.freeze(cloneBounds(metadata.entryPath || metadata.bounds))
++  });
++}
++
++/**
++ * Paves the pre-approved corridor only. The exact bounds are the terrain
++ * bounds; there is no padding and no scan of the city interior.
++ */
++export function buildCityConnector(dimension, origin, facing, metadata) {
++  const plan = connectorPlanFor(metadata);
++  const { fMin, fMax, sMin, sMax } = plan.bounds;
++  prepareSite(dimension, origin, facing, fMin, fMax, sMin, sMax, {
++    padding: 0,
++    clearHeight: 5,
++    fillDepth: 4,
++    surfaceBlock: "minecraft:grass_block"
++  });
++  const placer = makePlacer(dimension, origin, facing);
++  for (let f = fMin; f <= fMax; f++) {
++    for (let s = sMin; s <= sMax; s++) {
++      placer.block(f, s, -1, "minecraft:gravel");
++      for (let up = 0; up <= 3; up++) placer.block(f, s, up, "minecraft:air");
++    }
++  }
++  return Object.freeze({ ...plan, placedBounds: Object.freeze(cloneBounds(plan.bounds)), terrainBounds: Object.freeze(cloneBounds(plan.bounds)) });
++}
+--- a/tests/scripts/city_connectors.js
++++ b/tests/scripts/city_connectors.js
+@@ -0,0 +1,80 @@
++import { ROAD_AXES } from "./spatial_plan.js";
++import { prepareSite } from "./terrain.js";
++import { makePlacer } from "./builder.js";
++
++/**
++ * Narrow, detached city pedestrian connectors.
++ *
++ * A city builder returns an `approach` corridor rather than paving public
++ * space itself. This module consumes that metadata only after a successful
++ * city build. It never creates a final R94 crossroad or touches defences.
++ */
++
++function cloneBounds(bounds) {
++  return { fMin: bounds.fMin, fMax: bounds.fMax, sMin: bounds.sMin, sMax: bounds.sMax };
++}
++
++function widthOf(bounds, axis) {
++  return axis === "forward"
++    ? Math.abs(bounds.fMax - bounds.fMin) + 1
++    : Math.abs(bounds.sMax - bounds.sMin) + 1;
++}
++
++function isValidApproach(approach) {
++  if (!approach || (approach.axis !== "forward" && approach.axis !== "side")) return false;
++  const bounds = approach.bounds;
++  return !!bounds && [bounds.fMin, bounds.fMax, bounds.sMin, bounds.sMax].every(Number.isInteger) &&
++    bounds.fMin <= bounds.fMax && bounds.sMin <= bounds.sMax &&
++    Number.isInteger(approach.width) && approach.width >= 2;
++}
++
++/** Pure preflight. It rejects malformed metadata before any terrain edit. */
++export function connectorPlanFor(metadata) {
++  if (!metadata || typeof metadata.buildingId !== "string") throw new Error("city metadata is required");
++  const approach = metadata.approach;
++  if (!isValidApproach(approach)) throw new Error(`invalid city approach: ${metadata.buildingId}`);
++  const road = ROAD_AXES[approach.axis];
++  if (!road || road.width !== 3) throw new Error(`missing canonical road axis: ${approach.axis}`);
++  if (widthOf(approach.bounds, approach.axis) < 2) throw new Error(`approach is narrower than two blocks: ${metadata.buildingId}`);
++
++  // City metadata deliberately stops immediately beside the canonical road
++  // band so the building module does not pave public space itself. Adjacency
++  // therefore counts as a valid connection; the connector never widens into
++  // the three-block road strip.
++  const joinsRoad = approach.axis === "forward"
++    ? (approach.bounds.sMin <= road.bounds.sMax + 1 && approach.bounds.sMax >= road.bounds.sMin - 1)
++    : (approach.bounds.fMin <= road.bounds.fMax + 1 && approach.bounds.fMax >= road.bounds.fMin - 1);
++  if (!joinsRoad) throw new Error(`approach does not reach central road band: ${metadata.buildingId}`);
++
++  return Object.freeze({
++    buildingId: metadata.buildingId,
++    axis: approach.axis,
++    width: approach.width,
++    bounds: Object.freeze(cloneBounds(approach.bounds)),
++    roadBounds: Object.freeze(cloneBounds(road.bounds)),
++    entryPath: Object.freeze(cloneBounds(metadata.entryPath || metadata.bounds))
++  });
++}
++
++/**
++ * Paves the pre-approved corridor only. The exact bounds are the terrain
++ * bounds; there is no padding and no scan of the city interior.
++ */
++export function buildCityConnector(dimension, origin, facing, metadata) {
++  const plan = connectorPlanFor(metadata);
++  const { fMin, fMax, sMin, sMax } = plan.bounds;
++  prepareSite(dimension, origin, facing, fMin, fMax, sMin, sMax, {
++    padding: 0,
++    clearHeight: 5,
++    fillDepth: 4,
++    surfaceBlock: "minecraft:grass_block"
++  });
++  const placer = makePlacer(dimension, origin, facing);
++  for (let f = fMin; f <= fMax; f++) {
++    for (let s = sMin; s <= sMax; s++) {
++      placer.block(f, s, -1, "minecraft:gravel");
++      for (let up = 0; up <= 3; up++) placer.block(f, s, up, "minecraft:air");
++    }
++  }
++  return Object.freeze({ ...plan, placedBounds: Object.freeze(cloneBounds(plan.bounds)), terrainBounds: Object.freeze(cloneBounds(plan.bounds)) });
++}
+--- a/tests/city_progression_11_15.mjs
++++ b/tests/city_progression_11_15.mjs
+@@ -0,0 +1,139 @@
++import fs from "node:fs";
++import { __test__ } from "@minecraft/server";
++import { LEVELS, MAX_LAYOUT_V2_LEVEL } from "./scripts/levels.js";
++import { ROAD_AXES, SPATIAL_PLAN } from "./scripts/spatial_plan.js";
++import {
++  LEGACY_LAYOUT_MAX_ERROR,
++  LAYOUT_VERSION_V2,
++  chestSatisfiesRequirements,
++  foundVillage,
++  getCityBuildState,
++  getLayoutVersion,
++  getVillageState,
++  tryLevelUp
++} from "./scripts/village.js";
++
++let failures = 0;
++let checks = 0;
++function assert(condition, message) {
++  checks++;
++  if (!condition) {
++    failures++;
++    console.error("FAIL:", message);
++  } else console.log("ok:", message);
++}
++
++function clearContainer(container) {
++  for (let i = 0; i < container.size; i++) container.setItem(i, undefined);
++}
++
++function fillForLevel(elder, level) {
++  const state = getVillageState(elder);
++  const block = elder.dimension.getBlock(state.chest);
++  const container = block.getComponent("minecraft:inventory").container;
++  clearContainer(container);
++  let slot = 0;
++  for (const [id, amount] of Object.entries(LEVELS[level].requirements)) container.setItem(slot++, { typeId: id, amount });
++  return container;
++}
++
++function itemCount(container) {
++  let total = 0;
++  for (let i = 0; i < container.size; i++) total += container.getItem(i)?.amount || 0;
++  return total;
++}
++
++function rectOverlap(a, b) {
++  return a.fMin <= b.fMax && a.fMax >= b.fMin && a.sMin <= b.sMax && a.sMax >= b.sMin;
++}
++
++function roadOverlap(bounds) {
++  return rectOverlap(bounds, ROAD_AXES.forward.bounds) || rectOverlap(bounds, ROAD_AXES.side.bounds);
++}
++
++console.log("\n=== layout version semantics ===");
++const v2Player = __test__.makePlayer("V2Town", { x: 110000, y: 70, z: 110000 });
++const v2Elder = foundVillage(v2Player, { x: 110000, y: 70, z: 110000 }, 0);
++assert(v2Elder.getDynamicProperty("village:layoutVersion") === LAYOUT_VERSION_V2, "newly founded village receives layoutVersion=2");
++assert(getLayoutVersion(v2Elder) === 2, "new village reads as v2");
++assert(getLayoutVersion(v2Elder) === 2, "layoutVersion stays stable on repeated read");
++
++const legacyPlayer = __test__.makePlayer("LegacyTown", { x: 130000, y: 70, z: 110000 });
++const legacyElder = foundVillage(legacyPlayer, { x: 130000, y: 70, z: 110000 }, 1);
++legacyElder.setDynamicProperty("village:layoutVersion", undefined);
++assert(getLayoutVersion(legacyElder) === 1, "elder without layout key is safely treated as legacy v1");
++legacyElder.setDynamicProperty("village:level", 10);
++const legacyContainer = fillForLevel(legacyElder, 11);
++const legacyBefore = itemCount(legacyContainer);
++const legacyCheck = chestSatisfiesRequirements(legacyElder);
++const legacyResult = tryLevelUp(legacyElder);
++assert(!legacyCheck.done && legacyCheck.error === LEGACY_LAYOUT_MAX_ERROR, "legacy L10 receives neutral legacy_layout_max preflight");
++assert(!legacyResult.done && legacyResult.error === LEGACY_LAYOUT_MAX_ERROR, "legacy L11 is blocked without city runtime path");
++assert(itemCount(legacyContainer) === legacyBefore, "legacy L11 block never removes town hall items");
++assert(getVillageState(legacyElder).level === 10, "legacy level remains L10 after blocked city attempt");
++
++const invalidPlayer = __test__.makePlayer("InvalidTown", { x: 150000, y: 70, z: 110000 });
++const invalidElder = foundVillage(invalidPlayer, { x: 150000, y: 70, z: 110000 }, 2);
++invalidElder.setDynamicProperty("village:layoutVersion", "mystery-layout");
++invalidElder.setDynamicProperty("village:level", 10);
++fillForLevel(invalidElder, 11);
++const invalidResult = tryLevelUp(invalidElder);
++assert(!invalidResult.done && invalidResult.error === "invalid_layout_version", "unknown layoutVersion takes safe legacy fallback");
++assert(getVillageState(invalidElder).level === 10, "invalid layout cannot construct a city building");
++
++console.log("\n=== v2 progression L1 through L15 ===");
++for (let level = 2; level <= MAX_LAYOUT_V2_LEVEL; level++) {
++  const container = fillForLevel(v2Elder, level);
++  const before = itemCount(container);
++  const result = tryLevelUp(v2Elder);
++  assert(result.done && result.leveledUpTo === level, `v2 progresses successfully through L${level}`);
++  if (level <= 10) continue;
++
++  const cfg = LEVELS[level];
++  assert(result.cityBuildingId === cfg.cityBuildingId && result.shape?.buildingId === cfg.cityBuildingId, `L${level} calls exactly its canonical ${cfg.cityBuildingId} builder`);
++  assert(getCityBuildState(v2Elder, cfg.cityBuildingId) === 2, `L${level} commits build state 2 only after success`);
++  assert(result.connector?.width >= 2 && !roadOverlap(result.connector.bounds), `L${level} connector is a narrow two-block-plus approach outside central road bands`);
++  assert(itemCount(container) < before, `L${level} requirements are committed after city pipeline success`);
++  const plan = SPATIAL_PLAN.find((entry) => entry.buildingId === cfg.cityBuildingId);
++  assert(JSON.stringify(result.shape.bounds) === JSON.stringify(plan.bounds), `L${level} city building retains its approved SPATIAL_PLAN bounds`);
++}
++assert(getVillageState(v2Elder).level === 15, "new v2 village reaches L15");
++
++console.log("\n=== idempotency and recoverable failure ===");
++const blockCountAfterL15 = __test__.blockStore.size;
++const afterTerminal = tryLevelUp(v2Elder);
++assert(afterTerminal.done && afterTerminal.finished, "terminal L15 has no additional level build");
++assert(__test__.blockStore.size === blockCountAfterL15, "repeat action at terminal L15 creates no duplicate city blocks or connectors");
++
++const stateMismatchPlayer = __test__.makePlayer("StateMismatch", { x: 170000, y: 70, z: 110000 });
++const stateMismatchElder = foundVillage(stateMismatchPlayer, { x: 170000, y: 70, z: 110000 }, 3);
++stateMismatchElder.setDynamicProperty("village:level", 10);
++fillForLevel(stateMismatchElder, 11);
++stateMismatchElder.setDynamicProperty("village:v2:build:market_square", 2);
++const mismatchResult = tryLevelUp(stateMismatchElder);
++assert(!mismatchResult.done && mismatchResult.error === "city_build_state_mismatch", "completed marker without level advance never re-runs builder");
++
++const failurePlayer = __test__.makePlayer("Rollback", { x: 190000, y: 70, z: 110000 });
++const failureElder = foundVillage(failurePlayer, { x: 190000, y: 70, z: 110000 }, 0);
++failureElder.setDynamicProperty("village:level", 10);
++const failureContainer = fillForLevel(failureElder, 11);
++const failureBefore = itemCount(failureContainer);
++const failureResult = tryLevelUp(failureElder, { runLevelBuild() { throw new Error("injected city builder error"); } });
++assert(!failureResult.done && failureResult.error === "city_build_failed" && failureResult.recoverable, "builder error returns recoverable city failure");
++assert(getVillageState(failureElder).level === 10 && itemCount(failureContainer) === failureBefore, "failed city pipeline leaves level and town hall requirements unchanged");
++assert(getCityBuildState(failureElder, "market_square") === 0, "failed city pipeline clears temporary build state for retry");
++failureElder.setDynamicProperty("village:v2:build:market_square", 1);
++const recoveryResult = tryLevelUp(failureElder);
++assert(!recoveryResult.done && recoveryResult.error === "city_build_recovered" && getCityBuildState(failureElder, "market_square") === 0, "stale queued state recovers to retryable zero without a duplicate build");
++
++console.log("\n=== chapter hook and runtime ownership boundaries ===");
++const villageSource = fs.readFileSync(new URL("./scripts/village.js", import.meta.url), "utf8");
++const connectorSource = fs.readFileSync(new URL("./scripts/city_connectors.js", import.meta.url), "utf8");
++assert(villageSource.includes("setVillageChapterForLevel(elder, nextLevel)"), "successful city path preserves the existing chapter update hook with the real level");
++assert(!villageSource.includes("buildDefenceStage") && !connectorSource.includes("buildDefenceStage"), "city runtime does not activate isolated defence stages");
++assert(!connectorSource.includes("prepareFortifiedArea") && !connectorSource.includes("189"), "connector never requests full-square terrain preparation");
++
++console.log(failures === 0
++  ? `\nALL CITY PROGRESSION 11–15 TESTS PASSED (${checks} checks)`
++  : `\n${failures} CITY PROGRESSION 11–15 TEST(S) FAILED out of ${checks} checks`);
++process.exit(failures === 0 ? 0 : 1);

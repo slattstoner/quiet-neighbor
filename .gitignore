@@ -1,0 +1,11 @@
+# Test scripts are synced from GrowingVillages_BP/scripts before running tests;
+# don't track the synced copy itself.
+tests/scripts/
+
+# Build output
+*.mcaddon
+*.mcpack
+
+# OS / editor junk
+.DS_Store
+Thumbs.db

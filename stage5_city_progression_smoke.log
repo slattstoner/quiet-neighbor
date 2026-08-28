@@ -1,0 +1,75 @@
+
+=== layout version semantics ===
+ok: newly founded village receives layoutVersion=2
+ok: new village reads as v2
+ok: layoutVersion stays stable on repeated read
+ok: elder without layout key is safely treated as legacy v1
+ok: legacy L10 receives neutral legacy_layout_max preflight
+ok: legacy L11 is blocked without city runtime path
+ok: legacy L11 block never removes town hall items
+ok: legacy level remains L10 after blocked city attempt
+[village] invalid layoutVersion; treating as legacy: mystery-layout
+[village] invalid layoutVersion; treating as legacy: mystery-layout
+[village] invalid layoutVersion; treating as legacy: mystery-layout
+ok: unknown layoutVersion takes safe legacy fallback
+[village] invalid layoutVersion; treating as legacy: mystery-layout
+ok: invalid layout cannot construct a city building
+
+=== v2 progression L1 through L15 ===
+ok: v2 progresses successfully through L2
+ok: v2 progresses successfully through L3
+ok: v2 progresses successfully through L4
+ok: v2 progresses successfully through L5
+ok: v2 progresses successfully through L6
+ok: v2 progresses successfully through L7
+ok: v2 progresses successfully through L8
+ok: v2 progresses successfully through L9
+ok: v2 progresses successfully through L10
+ok: v2 progresses successfully through L11
+ok: L11 calls exactly its canonical market_square builder
+ok: L11 commits build state 2 only after success
+ok: L11 connector is a narrow two-block-plus approach outside central road bands
+ok: L11 requirements are committed after city pipeline success
+ok: L11 city building retains its approved SPATIAL_PLAN bounds
+ok: v2 progresses successfully through L12
+ok: L12 calls exactly its canonical granary_yard builder
+ok: L12 commits build state 2 only after success
+ok: L12 connector is a narrow two-block-plus approach outside central road bands
+ok: L12 requirements are committed after city pipeline success
+ok: L12 city building retains its approved SPATIAL_PLAN bounds
+ok: v2 progresses successfully through L13
+ok: L13 calls exactly its canonical travellers_inn builder
+ok: L13 commits build state 2 only after success
+ok: L13 connector is a narrow two-block-plus approach outside central road bands
+ok: L13 requirements are committed after city pipeline success
+ok: L13 city building retains its approved SPATIAL_PLAN bounds
+ok: v2 progresses successfully through L14
+ok: L14 calls exactly its canonical guard_barracks builder
+ok: L14 commits build state 2 only after success
+ok: L14 connector is a narrow two-block-plus approach outside central road bands
+ok: L14 requirements are committed after city pipeline success
+ok: L14 city building retains its approved SPATIAL_PLAN bounds
+ok: v2 progresses successfully through L15
+ok: L15 calls exactly its canonical village_archive builder
+ok: L15 commits build state 2 only after success
+ok: L15 connector is a narrow two-block-plus approach outside central road bands
+ok: L15 requirements are committed after city pipeline success
+ok: L15 city building retains its approved SPATIAL_PLAN bounds
+ok: new v2 village reaches L15
+
+=== idempotency and recoverable failure ===
+ok: terminal L15 has no additional level build
+ok: repeat action at terminal L15 creates no duplicate city blocks or connectors
+ok: completed marker without level advance never re-runs builder
+[village] city build pipeline failed: Error: injected city builder error
+ok: builder error returns recoverable city failure
+ok: failed city pipeline leaves level and town hall requirements unchanged
+ok: failed city pipeline clears temporary build state for retry
+ok: stale queued state recovers to retryable zero without a duplicate build
+
+=== chapter hook and runtime ownership boundaries ===
+ok: successful city path preserves the existing chapter update hook with the real level
+ok: city runtime does not activate isolated defence stages
+ok: connector never requests full-square terrain preparation
+
+ALL CITY PROGRESSION 11–15 TESTS PASSED (60 checks)
