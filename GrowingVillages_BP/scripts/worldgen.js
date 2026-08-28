@@ -62,9 +62,12 @@ function tryGenerateFor(player) {
   if (checkedCandidates.has(key)) return;
   checkedCandidates.add(key);
 
-  // One stable candidate per cell with a low placement chance, similar to a
-  // vanilla structure set. The candidate does not depend on player direction.
-  if (candidate.roll >= 8) return;
+  // One stable candidate per cell, attempted every time (no extra random
+  // skip), the same way a vanilla structure set tries once per spacing
+  // region: only terrain suitability and distance to a neighbor thin out
+  // attempts, so our villages end up about as common as vanilla ones would
+  // have been across the same ground. The candidate does not depend on
+  // player direction.
   if (findNearestElder(dimension, candidate, MIN_DISTANCE) || hasVanillaVillageNearby(dimension, candidate)) return;
   const palette = paletteAt(dimension, candidate);
   const site = suitableSite(dimension, candidate);
