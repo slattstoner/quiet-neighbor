@@ -29,11 +29,13 @@ const TIER_LABEL = {
 };
 
 /**
- * Writes the four lines of the gate signboard. Sign text is set through
- * the sign block component; if that isn't available the sign is still
- * placed, just blank, rather than aborting the build.
+ * Writes a sign's text through the sign block component; if that isn't
+ * available the sign is still placed, just blank, rather than aborting
+ * the build. Exported for reuse by any other placard-style sign (e.g. the
+ * small field/pen labels in upgrades.js), so there is one tested path for
+ * writing sign text rather than several copies of the same try/catch.
  */
-function writeSign(dimension, pos, lines) {
+export function writeSign(dimension, pos, lines) {
   try {
     const block = dimension.getBlock(pos);
     const sign = block?.getComponent("minecraft:sign");

@@ -10,6 +10,7 @@ import {
 import { TIER_PALISADE, TIER_COBBLE, TIER_CASTLE } from "./walls.js";
 import { buildCityBuilding } from "./city_buildings_11_15.js";
 import { specialFootprintsUpTo } from "./specials.js";
+import { farmerYardFootprint } from "./upgrades.js";
 
 /**
  * Level 1 (town hall + campfire + first house) is built at founding and
@@ -247,12 +248,26 @@ function plotFootprint(level) {
   if (!cfg || cfg.cityBuildingId || !Number.isInteger(cfg.plotForward)) return null;
   const plotSideNear = cfg.side >= 0 ? 2 : -2;
   const plotSideFar = cfg.side >= 0 ? 14 : -14;
-  return {
+  const rect = {
     fMin: cfg.plotForward - 2,
     fMax: cfg.plotForward + 9,
     sMin: Math.min(plotSideNear, plotSideFar),
     sMax: Math.max(plotSideNear, plotSideFar)
   };
+  // The farmer's quest-tier outbuildings (upgrades.js) run well past this
+  // generic plot rectangle - a chain of animal pens with their own oak-log
+  // corners, laid out behind the field and starter crop patch. Without this,
+  // the fortification wall's interior sweep (which strips any exposed log,
+  // treating it as a wild tree trunk) would eventually tear those corner
+  // posts off the moment a later wall tier re-swept the interior.
+  if (cfg.npc?.professionName === "Фермер") {
+    const yard = farmerYardFootprint(cfg.plotForward, cfg.side);
+    rect.fMin = Math.min(rect.fMin, yard.fMin);
+    rect.fMax = Math.max(rect.fMax, yard.fMax);
+    rect.sMin = Math.min(rect.sMin, yard.sMin);
+    rect.sMax = Math.max(rect.sMax, yard.sMax);
+  }
+  return rect;
 }
 
 /**

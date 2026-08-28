@@ -10,6 +10,13 @@ const BIOME_TO_PALETTE = {
   "minecraft:plains": "plains", "minecraft:sunflower_plains": "plains",
   "minecraft:meadow": "meadow", "minecraft:cherry_grove": "meadow",
   "minecraft:taiga": "taiga", "minecraft:old_growth_pine_taiga": "taiga", "minecraft:old_growth_spruce_taiga": "taiga",
+  // Bedrock's legacy cold/snowy biome ids - see the matching .biome.json
+  // files shipped in GrowingVillages_BP/biomes/. Left unmapped, a village
+  // founded here silently fell back to the "plains" (oak) palette even
+  // though the ground and treeline read as taiga, which is why a snowy
+  // village could end up all in oak instead of spruce.
+  "minecraft:ice_plains": "taiga", "minecraft:cold_taiga": "taiga",
+  "minecraft:cold_taiga_hills": "taiga", "minecraft:taiga_hills": "taiga",
   "minecraft:savanna": "savanna", "minecraft:savanna_plateau": "savanna", "minecraft:windswept_savanna": "savanna",
   "minecraft:desert": "desert"
 };

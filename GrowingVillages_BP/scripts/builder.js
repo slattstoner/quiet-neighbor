@@ -174,6 +174,23 @@ function gabledRoof(placer, f1, f2, s1, s2, wallTopUp, roofStairsBlock, gableBlo
 }
 
 /**
+ * The plot's near/far edges along the side axis, using the exact rule
+ * houseShell plants a house with (legacy |side|<=1 near-road positions at
+ * ±6, explicit values such as ±10 elsewhere). Exported so code that has to
+ * start something new just past a house - a quest-upgrade outbuilding, say -
+ * can find the house's true footprint instead of re-deriving these same
+ * numbers independently and drifting out of sync with it (that drift is
+ * exactly what let a farmer quest upgrade overlap the house itself).
+ */
+export function plotSideBounds(side, depth = 7) {
+  const plotCenter = Math.abs(side) <= 1 ? (side >= 0 ? 6 : -6) : side;
+  const half = Math.floor(depth / 2);
+  const near = plotCenter >= 0 ? plotCenter - half : plotCenter + half;
+  const far = near + (plotCenter >= 0 ? depth - 1 : -(depth - 1));
+  return { near, far, sMin: Math.min(near, far), sMax: Math.max(near, far) };
+}
+
+/**
  * House shell in vanilla village style: stone foundation course, log corner
  * posts, plank infill walls, a horizontal beam course under the eaves,
  * glass windows with sills, and a pitched roof.
@@ -182,14 +199,7 @@ function houseShell(placer, f1, side, width, depth, height, mats, doorBlock) {
   // The road occupies -2..2 and the lamp posts sit at +/-3, so |side|
   // needs to clear that before a wall can start.
   const f2 = f1 + width - 1;
-  // `side` is now the centre line of a plot. Legacy ±1 values retain the
-  // original near-road positions at ±6, while explicit values such as ±10
-  // place houses in outer quadrants with room for quest extensions.
-  const plotCenter = Math.abs(side) <= 1 ? (side >= 0 ? 6 : -6) : side;
-  const half = Math.floor(depth / 2);
-  const s1 = plotCenter >= 0 ? plotCenter - half : plotCenter + half;
-  const s2 = s1 + (plotCenter >= 0 ? depth - 1 : -(depth - 1));
-  const sMin = Math.min(s1, s2), sMax = Math.max(s1, s2);
+  const { near: s1, far: s2, sMin, sMax } = plotSideBounds(side, depth);
   const midS = Math.round((s1 + s2) / 2);
 
   // Foundation course at ground level and a solid floor slab below
@@ -330,22 +340,33 @@ export function buildCampfire(dimension, origin, facing, plotForward) {
   placer.block(f + 3, 0, 0, "minecraft:oak_fence");
 }
 
-function paletteMats(mats, paletteId) {
+/**
+ * Re-materializes a building's material set for the village's palette
+ * (itself chosen from the founding biome - see palettes.js). `mats` only
+ * needs the keys a given caller actually uses - a shed's material set has
+ * no `floor`/`gable`, a house's has no `roofSolid` - so every key is
+ * swapped defensively rather than assumed present, which is what lets this
+ * same function serve both houses (builder.js) and quest-upgrade
+ * outbuildings (upgrades.js) instead of each keeping its own copy.
+ */
+export function paletteMats(mats, paletteId) {
   const p = paletteById(paletteId);
   if (p.id === "plains") return mats;
   const wood = `minecraft:${p.wood}`;
+  const swapPlanks = (v) => (v && v.includes("_planks") ? `${wood}_planks` : v);
   return {
     ...mats,
-    foundation: mats.foundation.includes("cobblestone") ? `minecraft:${p.stone}` : mats.foundation,
-    wall: mats.wall.includes("_planks") ? `${wood}_planks` : mats.wall,
-    corner: mats.corner.includes("_log") ? `${wood}_log` : mats.corner,
-    floor: mats.floor.includes("_planks") ? `${wood}_planks` : mats.floor,
-    roofStairs: mats.roofStairs.includes("_stairs") ? `minecraft:${p.roof}` : mats.roofStairs,
-    gable: mats.gable.includes("_planks") ? `${wood}_planks` : mats.gable
+    foundation: mats.foundation && mats.foundation.includes("cobblestone") ? `minecraft:${p.stone}` : mats.foundation,
+    wall: swapPlanks(mats.wall),
+    corner: mats.corner && mats.corner.includes("_log") ? `${wood}_log` : mats.corner,
+    floor: swapPlanks(mats.floor),
+    roofStairs: mats.roofStairs && mats.roofStairs.includes("_stairs") ? `minecraft:${p.roof}` : mats.roofStairs,
+    roofSolid: swapPlanks(mats.roofSolid),
+    gable: swapPlanks(mats.gable)
   };
 }
 
-function paletteDoor(defaultDoor, paletteId) {
+export function paletteDoor(defaultDoor, paletteId) {
   const p = paletteById(paletteId);
   return p.id === "plains" ? "minecraft:wooden_door" : `minecraft:${p.wood}_door`;
 }
@@ -394,6 +415,22 @@ const FARMER_MATS = {
   gable: "minecraft:oak_planks"
 };
 
+// Geometry of the starter crop patch built alongside the farmer's house
+// (below). Exported as `farmerPatchOuterEdge` so the quest-upgrade
+// buildings in upgrades.js can start their own footprints beyond the
+// patch's fence without re-deriving (and risking drifting out of sync
+// with) these same two numbers.
+const FARMER_PATCH_GAP = 2;
+const FARMER_PATCH_DEPTH = 2;
+
+/** The outermost column already occupied by the farmer's starter crop patch (fence included). */
+export function farmerPatchOuterEdge(side) {
+  const { far } = plotSideBounds(side, 7);
+  const sign = side >= 0 ? 1 : -1;
+  // +1 for the patch's own fence ring just past its crop rows.
+  return far + sign * (FARMER_PATCH_GAP + FARMER_PATCH_DEPTH + 1);
+}
+
 export function buildFarmerHouse(dimension, origin, facing, plotForward, side, paletteId) {
   const placer = makePlacer(dimension, origin, facing);
   const shape = houseShell(placer, plotForward, side, 7, 7, 5, paletteMats(FARMER_MATS, paletteId), paletteDoor("minecraft:wooden_door", paletteId));
@@ -425,8 +462,8 @@ export function buildFarmerHouse(dimension, origin, facing, plotForward, side, p
   // the terrain-levelling pass and the future perimeter wall at |side|=15,
   // which is exactly why a fence post ended up floating over unlevelled
   // ground with nothing under it.
-  const gap = 2;
-  const patchDepth = 2;
+  const gap = FARMER_PATCH_GAP;
+  const patchDepth = FARMER_PATCH_DEPTH;
   const patchNear = shape.side >= 0 ? shape.sMax + gap : shape.sMin - gap;
   const patchFar = shape.side >= 0 ? patchNear + patchDepth : patchNear - patchDepth;
   const pMin = Math.min(patchNear, patchFar), pMax = Math.max(patchNear, patchFar);
