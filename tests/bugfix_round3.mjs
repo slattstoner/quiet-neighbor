@@ -112,35 +112,45 @@ console.log("\n=== the deprecated <event>-in-identifier spawn syntax is never us
 }
 
 // ---------- 3. tether debounce doesn't recall on a brief excursion, and resets on return ----------
+// Ordinary residents/craftsmen are no longer position-tethered at all (they
+// rely on vanilla's own bed AI instead - see setHome's doc comment), so this
+// debounce behaviour is now exercised through a tower guard, which - like
+// gate golems and the elder - still keeps the radius tether.
 console.log("\n=== tether grace period resets when a villager comes back on its own ===");
 {
-  const player = __test__.makePlayer("DebounceTester", { x: -953000, y: 70, z: 0 });
-  const elder = foundVillage(player, { x: -953000, y: 70, z: 0 }, 0);
-  const state0 = getVillageState(elder);
-  const chest = elder.dimension.getBlock(state0.chest).getComponent("minecraft:inventory").container;
-  const cfg = LEVELS[2];
-  let slot = 0;
-  for (const [id, count] of Object.entries(cfg.requirements)) chest.setItem(slot++, { typeId: id, amount: count });
-  tryLevelUp(elder);
-  const farmer = elder.dimension.getEntities({ tags: ["village_crafter", "village:" + state0.id] })[0];
-  const home = getHome(farmer);
+  const home0 = { x: -955000, y: 70, z: 0 };
+  const guard = spawnTowerGuard(dim, home0, "debounce-village", 8);
+  const home = getHome(guard);
 
   startTetherLoop();
   const tick = system._intervals[system._intervals.length - 1];
 
   const outside = { x: home.location.x + home.radius + 5, y: home.location.y, z: home.location.z };
-  const before = farmer._teleports || 0;
-  farmer.location = outside;
+  const before = guard._teleports || 0;
+  guard.location = outside;
   tick(); // strike 1
-  farmer.location = { ...home.location }; // wanders back on its own before the recall threshold
+  guard.location = { ...home.location }; // wanders back on its own before the recall threshold
   tick(); // back in range - resets the strike counter, not just pauses it
-  assert((farmer._teleports || 0) === before, "villager that returns on its own before the threshold is never recalled");
+  assert((guard._teleports || 0) === before, "guard that returns on its own before the threshold is never recalled");
 
-  farmer.location = outside;
+  guard.location = outside;
   tick(); tick(); // only 2 strikes - counter was reset, so this alone must not be enough
-  assert((farmer._teleports || 0) === before, "the reset actually took effect (not just carried over strikes)");
+  assert((guard._teleports || 0) === before, "the reset actually took effect (not just carried over strikes)");
   tick(); // 3rd consecutive strike
-  assert((farmer._teleports || 0) > before, "sustained absence after a reset still eventually recalls it");
+  assert((guard._teleports || 0) > before, "sustained absence after a reset still eventually recalls it");
+}
+
+// ---------- 4. ordinary craftsmen are never position-tethered ----------
+console.log("\n=== craftsmen wander freely like vanilla villagers ===");
+{
+  const home0 = { x: -956000, y: 70, z: 0 };
+  const farmer = spawnCraftsman(dim, home0, "Фермер", "debounce-village", 8);
+  assert(!farmer.hasTag("village_tethered"), "a craftsman is not tagged village_tethered");
+  const before = farmer._teleports || 0;
+  farmer.location = { x: home0.x + 200, y: home0.y, z: home0.z };
+  const tick = system._intervals[system._intervals.length - 1];
+  tick(); tick(); tick(); tick();
+  assert((farmer._teleports || 0) === before, "a craftsman far from its spawn point is never recalled");
 }
 
 console.log(failures === 0 ? "\nALL BUGFIX ROUND 3 TESTS PASSED" : `\n${failures} BUGFIX ROUND 3 TEST(S) FAILED`);

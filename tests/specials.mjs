@@ -1,7 +1,9 @@
 import { __test__ } from "@minecraft/server";
 import { foundVillage, getVillageState } from "./scripts/village.js";
-import { buildSpecialBuilding, specialBuildingSpec, spawnSpecialResident, ALCHEMIST_PRODUCTS, giveProduct } from "./scripts/specials.js";
+import { buildSpecialBuilding, specialBuildingSpec, spawnSpecialResident, ALCHEMIST_PRODUCTS, giveProduct, SPECIAL_BUILDINGS } from "./scripts/specials.js";
 import { SPECIAL_QUESTS, getSpecialQuestStep, turnInSpecialQuest } from "./scripts/special_content.js";
+import { fullVillageMaxForward } from "./scripts/levels.js";
+import { perimeterFor } from "./scripts/walls.js";
 
 let failures = 0;
 function assert(condition, message) {
@@ -38,6 +40,21 @@ assert(getSpecialQuestStep(oldtimer, "ranger") === 1, "ranger: progress persists
 
 const alchemistResult = giveProduct(player, ALCHEMIST_PRODUCTS[2]);
 assert(alchemistResult.ok === false, "alchemist: purchase fails without emeralds" );
+
+// Every special building (the old-timer's house included) sits well past
+// LEVELS' own furthest plot (forward 38), so the wall perimeter must be
+// sized to cover them too - otherwise they land outside an already-final
+// wall ring, on unlevelled terrain past the palisade instead of inside the
+// village alongside the other houses.
+{
+  const reach = fullVillageMaxForward();
+  const rect = perimeterFor(reach);
+  for (const [key, spec] of Object.entries(SPECIAL_BUILDINGS)) {
+    const f1 = spec.forward - 6, f2 = spec.forward + 6;
+    assert(f1 >= rect.fMin && f2 <= rect.fMax,
+      `${key}: footprint (forward ${f1}..${f2}) sits inside the wall perimeter (${rect.fMin}..${rect.fMax})`);
+  }
+}
 
 console.log(failures === 0 ? "ALL SPECIAL TESTS PASSED" : `${failures} SPECIAL TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

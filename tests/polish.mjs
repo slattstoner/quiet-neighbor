@@ -135,19 +135,16 @@ console.log("\n=== tether radius no longer fights vanilla sleep AI ===");
       `craftsman within radius (mid-transit to bed) is not yanked at time ${timeOfDay}`);
   }
 
-  // The tether still works at all when a villager genuinely strays past
-  // its radius - this isn't "tether disabled", just "no longer tightened
-  // specifically at night". It takes STRIKES_BEFORE_RECALL consecutive
-  // over-range checks now (a short grace period so natural AI gets a
-  // chance to return on its own first - see npc.js's startTetherLoop for
-  // why), so a single stray tick is no longer enough by itself.
+  // Ordinary craftsmen are no longer position-tethered at all - straying
+  // arbitrarily far from the spawn point never triggers a recall, day or
+  // night. Vanilla's own bed/job-site AI is what brings the villager home,
+  // not a radius check; see setHome's doc comment in npc.js.
+  assert(!farmer.hasTag("village_tethered"), "a craftsman is not tagged village_tethered");
   world._timeOfDay = 18000;
   farmer.location = { x: fHome.location.x + fHome.radius + 5, y: fHome.location.y, z: fHome.location.z };
   const before2 = farmer._teleports || 0;
-  tick();
-  assert((farmer._teleports || 0) === before2, "a single stray tick alone does not yet trigger recall (grace period)");
-  tick(); tick();
-  assert((farmer._teleports || 0) > before2, "but staying out of range for several consecutive checks still gets it pulled back");
+  tick(); tick(); tick(); tick();
+  assert((farmer._teleports || 0) === before2, "a craftsman that strays past its old radius is never recalled");
 
   // Guards and golems hold their posts regardless
   const gHome = getHome(guard);

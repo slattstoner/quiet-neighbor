@@ -2,12 +2,32 @@ import { ItemStack } from "@minecraft/server";
 import { toWorld, setBlock, setBlockMulti, VILLAGER_TYPE, ADULT_SPAWN_OPTIONS } from "./util.js";
 import { prepareSite, sampleGroundLevel, withLoadedArea } from "./terrain.js";
 
+/**
+ * Special buildings sit on their own plots INSIDE the village, in the
+ * outer quadrants behind the street's house row.
+ *
+ * They used to be strung out along the street at forward 48-60, which put
+ * every one of them past the wall ring (radius 48) - the old-timer's house
+ * ended up embedded in the palisade itself, out on the village edge rather
+ * than among the other houses. The numbered levels claim forward -28..47 in
+ * a band of |side| <= 14 either side of the road (see plotFootprint), so
+ * the free ground inside the wall is the |side| 18..47 quadrants; each shed
+ * gets a plot there, one per quadrant plus one beside the town hall, all
+ * comfortably clear of the house row, the road corridor and the wall.
+ *
+ * `unlockLevel` is the village level at which the building can first
+ * appear. builtPlotFootprints() uses it to start protecting the plot from
+ * the fortification interior sweep at the right moment - late enough that
+ * the ground still gets flattened with the rest of the village first, early
+ * enough that no later wall tier can bulldoze a shed already standing on it
+ * (the sheds' log corner posts read as tree trunks to that sweep).
+ */
 const SPECIAL_BUILDINGS = {
-  alchemist: { label: "Домик алхимика", forward: 50, side: 8, profession: "Алхимик", tag: "village_alchemist" },
-  oldtimer: { label: "Домик старожилы", forward: 48, side: -12, profession: "Старожила", tag: "village_oldtimer" },
-  ranger: { label: "Дом хранителя леса", forward: 60, side: 8, profession: "Лесничий", tag: "village_ranger" },
-  healer: { label: "Лазарет милосердия", forward: 60, side: -8, profession: "Лекарь", tag: "village_healer" },
-  engineer: { label: "Дом мастера механизмов", forward: 55, side: 8, profession: "Инженер", tag: "village_engineer" }
+  alchemist: { label: "Домик алхимика", forward: 14, side: 24, profession: "Алхимик", tag: "village_alchemist", unlockLevel: 6 },
+  oldtimer: { label: "Домик старожилы", forward: 0, side: -24, profession: "Старожила", tag: "village_oldtimer", unlockLevel: 8 },
+  ranger: { label: "Дом хранителя леса", forward: -14, side: 24, profession: "Лесничий", tag: "village_ranger", unlockLevel: 8 },
+  healer: { label: "Лазарет милосердия", forward: -14, side: -24, profession: "Лекарь", tag: "village_healer", unlockLevel: 8 },
+  engineer: { label: "Дом мастера механизмов", forward: 14, side: -24, profession: "Инженер", tag: "village_engineer", unlockLevel: 8 }
 };
 
 const PLUS_SIDE = ["south", "north", "east", "west"];
@@ -86,73 +106,127 @@ function shed(dimension, origin, facing, centerF, centerS, materials, furniture)
   return { f1, f2, s1, s2, door: { f: centerF, s: doorS, up: 0 }, centerF, centerS };
 }
 
+/**
+ * Turns the five interior fittings into absolute local coordinates for a
+ * shed centred anywhere. The shed's hollow interior is only 3x3 (see
+ * shed()'s air box), so the first four sit in its interior corners and the
+ * fifth against the wall opposite the door - which is the side away from
+ * the street, i.e. the sign of `centerS`.
+ *
+ * Previously every builder spelled its furniture out in absolute
+ * coordinates tied to one hard-coded plot, so a fitting could not follow
+ * the building when the plot moved; two of them (the healer's and every
+ * shed's fifth item) were also written at +/-2 from the centre, which is
+ * the wall line rather than the interior, and so punched a hole in the
+ * shed's own wall instead of furnishing it.
+ */
+function furnish(centerF, centerS, fittings) {
+  const away = centerS >= 0 ? 1 : -1;
+  const spots = [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, away]];
+  return fittings.map((fitting, i) => ({
+    f: centerF + spots[i][0],
+    s: centerS + spots[i][1],
+    typeId: fitting.typeId,
+    states: fitting.states
+  }));
+}
+
+function shedAt(key, dimension, origin, facing, materials, fittings) {
+  const spec = SPECIAL_BUILDINGS[key];
+  const shape = shed(dimension, origin, facing, spec.forward, spec.side,
+    materials, furnish(spec.forward, spec.side, fittings));
+  return { ...shape, building: key };
+}
+
 function buildAlchemist(dimension, origin, facing) {
-  const shape = shed(dimension, origin, facing, 50, 8,
+  return shedAt("alchemist", dimension, origin, facing,
     { foundation: "minecraft:stone_bricks", wall: "minecraft:purple_terracotta", corner: "minecraft:dark_oak_log", roof: "minecraft:dark_oak_planks" },
     [
-      { f: 49, s: 7, typeId: "minecraft:brewing_stand" },
-      { f: 51, s: 7, typeId: "minecraft:cauldron" },
-      { f: 49, s: 9, typeId: "minecraft:barrel" },
-      { f: 51, s: 9, typeId: "minecraft:chest" },
-      { f: 50, s: 10, typeId: "minecraft:flower_pot" }
+      { typeId: "minecraft:brewing_stand" },
+      { typeId: "minecraft:cauldron" },
+      { typeId: "minecraft:barrel" },
+      { typeId: "minecraft:chest" },
+      { typeId: "minecraft:flower_pot" }
     ]);
-  return { ...shape, building: "alchemist" };
 }
 
 function buildOldtimer(dimension, origin, facing) {
-  const shape = shed(dimension, origin, facing, 48, -12,
+  return shedAt("oldtimer", dimension, origin, facing,
     { foundation: "minecraft:stone_bricks", wall: "minecraft:spruce_planks", corner: "minecraft:spruce_log", roof: "minecraft:spruce_planks" },
     [
-      { f: 47, s: -11, typeId: "minecraft:lectern" },
-      { f: 49, s: -11, typeId: "minecraft:bookshelf" },
-      { f: 47, s: -13, typeId: "minecraft:chest" },
-      { f: 49, s: -13, typeId: "minecraft:bell", states: { attachment: "standing", "minecraft:cardinal_direction": "south" } },
-      { f: 48, s: -14, typeId: "minecraft:cartography_table" }
+      { typeId: "minecraft:lectern" },
+      { typeId: "minecraft:bookshelf" },
+      { typeId: "minecraft:chest" },
+      { typeId: "minecraft:bell", states: { attachment: "standing", "minecraft:cardinal_direction": "south" } },
+      { typeId: "minecraft:cartography_table" }
     ]);
-  return { ...shape, building: "oldtimer" };
 }
 
 function buildRanger(dimension, origin, facing) {
-  const shape = shed(dimension, origin, facing, 60, 8,
+  const shape = shedAt("ranger", dimension, origin, facing,
     { foundation: "minecraft:cobblestone", wall: "minecraft:oak_planks", corner: "minecraft:spruce_log", roof: "minecraft:oak_planks" },
     [
-      { f: 59, s: 7, typeId: "minecraft:composter" },
-      { f: 61, s: 7, typeId: "minecraft:barrel" },
-      { f: 59, s: 9, typeId: "minecraft:chest" },
-      { f: 61, s: 9, typeId: "minecraft:oak_fence" },
-      { f: 60, s: 10, typeId: "minecraft:campfire", states: { extinguished: false } }
+      { typeId: "minecraft:composter" },
+      { typeId: "minecraft:barrel" },
+      { typeId: "minecraft:chest" },
+      { typeId: "minecraft:oak_fence" },
+      { typeId: "minecraft:campfire", states: { extinguished: false } }
     ]);
-  for (let f = 58; f <= 62; f++) local(dimension, origin, facing, f, 11, 0, "minecraft:oak_sapling");
-  return { ...shape, building: "ranger" };
+  // A row of saplings just outside the shed, on the side away from the road.
+  const nurseryS = shape.centerS + (shape.centerS >= 0 ? 3 : -3);
+  for (let df = -2; df <= 2; df++) {
+    local(dimension, origin, facing, shape.centerF + df, nurseryS, 0, "minecraft:oak_sapling");
+  }
+  return shape;
 }
 
 function buildHealer(dimension, origin, facing) {
-  const shape = shed(dimension, origin, facing, 60, -8,
+  return shedAt("healer", dimension, origin, facing,
     { foundation: "minecraft:quartz_block", wall: "minecraft:white_wool", corner: "minecraft:birch_log", roof: "minecraft:red_wool" },
     [
-      { f: 58, s: -7, typeId: "minecraft:brewing_stand" },
-      { f: 62, s: -7, typeId: "minecraft:cauldron" },
-      { f: 58, s: -9, typeId: "minecraft:chest" },
-      { f: 62, s: -9, typeId: "minecraft:bed" },
-      { f: 60, s: -10, typeId: "minecraft:flower_pot" }
+      { typeId: "minecraft:brewing_stand" },
+      { typeId: "minecraft:cauldron" },
+      { typeId: "minecraft:chest" },
+      { typeId: "minecraft:bed" },
+      { typeId: "minecraft:flower_pot" }
     ]);
-  return { ...shape, building: "healer" };
 }
 
 function buildEngineer(dimension, origin, facing) {
-  const shape = shed(dimension, origin, facing, 55, 8,
+  return shedAt("engineer", dimension, origin, facing,
     { foundation: "minecraft:stone_bricks", wall: "minecraft:brick_block", corner: "minecraft:iron_block", roof: "minecraft:copper_block" },
     [
-      { f: 54, s: 7, typeId: "minecraft:redstone_lamp" },
-      { f: 56, s: 7, typeId: "minecraft:crafting_table" },
-      { f: 54, s: 9, typeId: "minecraft:barrel" },
-      { f: 56, s: 9, typeId: "minecraft:lever" },
-      { f: 55, s: 10, typeId: "minecraft:observer" }
+      { typeId: "minecraft:redstone_lamp" },
+      { typeId: "minecraft:crafting_table" },
+      { typeId: "minecraft:barrel" },
+      { typeId: "minecraft:lever" },
+      { typeId: "minecraft:observer" }
     ]);
-  return { ...shape, building: "engineer" };
 }
 
 const BUILDERS = { alchemist: buildAlchemist, oldtimer: buildOldtimer, ranger: buildRanger, healer: buildHealer, engineer: buildEngineer };
+
+/**
+ * The plot each special building claims, in the same local f/s coordinates
+ * levels.js uses for house plots. Matches the footprint
+ * buildSpecialBuilding() levels before building (spec.forward/side +/- 6).
+ */
+export function specialFootprint(key) {
+  const spec = SPECIAL_BUILDINGS[key];
+  if (!spec) return null;
+  return {
+    fMin: spec.forward - 6, fMax: spec.forward + 6,
+    sMin: spec.side - 6, sMax: spec.side + 6,
+    unlockLevel: spec.unlockLevel
+  };
+}
+
+/** Every special plot unlocked at or below `uptoLevel`. */
+export function specialFootprintsUpTo(uptoLevel) {
+  return Object.keys(SPECIAL_BUILDINGS)
+    .map(specialFootprint)
+    .filter((rect) => rect && uptoLevel >= rect.unlockLevel);
+}
 
 export function specialBuildingSpec(key) { return SPECIAL_BUILDINGS[key] || null; }
 

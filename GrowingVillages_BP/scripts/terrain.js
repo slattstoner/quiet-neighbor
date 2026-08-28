@@ -22,7 +22,19 @@ const NOT_GROUND = new Set([
   // so it never matched a real block.typeId here. Both kept: harmless if unused.
   "minecraft:deadbush", "minecraft:vine", "minecraft:reeds", "minecraft:sugar_cane",
   "minecraft:brown_mushroom", "minecraft:red_mushroom",
-  "minecraft:pink_petals", "minecraft:bush", "minecraft:firefly_bush"
+  "minecraft:pink_petals", "minecraft:bush", "minecraft:firefly_bush",
+  // Ground cover added by the "Spring to Life" drop (Bedrock 1.21.70+).
+  // minecraft:leaf_litter is the one that actually showed up in testing:
+  // it is NOT a "*_leaves" block, so isTreeLeaves()/isTreePart() never
+  // matched it and the interior sweep left it scattered all over the
+  // finished village - and because it was also missing from this set,
+  // probeGround() counted it as solid ground and sat the whole village
+  // platform one block too high wherever a forest floor was carpeted with
+  // it. The rest of that drop's ground cover is listed alongside it so the
+  // same class of block can't cause the same two bugs again.
+  "minecraft:leaf_litter", "minecraft:wildflowers",
+  "minecraft:short_dry_grass", "minecraft:tall_dry_grass",
+  "minecraft:cactus_flower"
 ]);
 
 /** Natural blocks that may be safely removed while preparing a village. */
@@ -144,6 +156,75 @@ export function sampleGroundLevel(dimension, origin, facing, fMin, fMax, sMin, s
 }
 
 /**
+ * Levels one column to the village platform: clears the air above it,
+ * takes down any trunk or exposed ore reaching past that, lays the surface
+ * course and backfills hollow ground under it. Shared by prepareSite and
+ * prepareCorridorJob so the two produce identical ground.
+ */
+function prepareColumn(dimension, origin, facing, f, s, clearHeight, treeMargin, surfaceBlock, fillBlock, fillDepth) {
+  for (let up = 0; up < clearHeight; up++) {
+    const p = toWorld(origin, facing, f, s, up);
+    setBlock(dimension, p.x, p.y, p.z, "minecraft:air");
+  }
+  for (let up = clearHeight; up < clearHeight + treeMargin; up++) {
+    const p = toWorld(origin, facing, f, s, up);
+    let typeId = null;
+    try { typeId = dimension.getBlock({ x: p.x, y: p.y, z: p.z })?.typeId; } catch (e) { continue; }
+    if (isTreePart(typeId) || isOreBlock(typeId)) {
+      setBlock(dimension, p.x, p.y, p.z, "minecraft:air");
+    }
+  }
+  // Lay the surface course, then backfill any hollow ground beneath it
+  const surface = toWorld(origin, facing, f, s, -1);
+  setBlock(dimension, surface.x, surface.y, surface.z, surfaceBlock);
+  for (let down = 2; down <= fillDepth + 1; down++) {
+    const p = toWorld(origin, facing, f, s, -down);
+    let existing = null;
+    try {
+      const block = dimension.getBlock({ x: p.x, y: p.y, z: p.z });
+      existing = block ? block.typeId : null;
+    } catch (e) {
+      continue;
+    }
+    // Only fill genuine voids (air/water/foliage); leave real stone alone
+    if (existing !== null && NOT_GROUND.has(existing)) {
+      setBlock(dimension, p.x, p.y, p.z, fillBlock);
+    }
+  }
+}
+
+/**
+ * Levels and surfaces a long, narrow strip a few columns at a time, as a
+ * job so a strip spanning the whole village never blocks a tick.
+ *
+ * Used for the street's own corridor, which the fortification build owns
+ * end to end: the corridor is excluded from the interior sweep (that sweep
+ * cannot tell placed road gravel from natural gravel and repainted the
+ * street as grass), so something has to level the stretch between the last
+ * house and each gate, and this is it. `skipF` lets the caller leave a
+ * column alone - the campfire plaza sits astride the street.
+ */
+export function* prepareCorridorJob(dimension, origin, facing, fMin, fMax, sMin, sMax, options) {
+  const opts = options || {};
+  const clearHeight = opts.clearHeight === undefined ? 8 : opts.clearHeight;
+  const treeMargin = opts.treeMargin === undefined ? 26 : opts.treeMargin;
+  const fillDepth = opts.fillDepth === undefined ? 5 : opts.fillDepth;
+  const surfaceBlock = opts.surfaceBlock || "minecraft:grass_block";
+  const fillBlock = opts.fillBlock || "minecraft:dirt";
+  const skipF = opts.skipF || (() => false);
+  const from = Math.min(fMin, fMax), to = Math.max(fMin, fMax);
+  const s1 = Math.min(sMin, sMax), s2 = Math.max(sMin, sMax);
+  let done = 0;
+  for (let f = from; f <= to; f++) {
+    if (skipF(f)) continue;
+    for (let s = s1; s <= s2; s++) {
+      prepareColumn(dimension, origin, facing, f, s, clearHeight, treeMargin, surfaceBlock, fillBlock, fillDepth);
+    }
+    if (++done % 4 === 0) yield;
+  }
+}
+
+/**
  * Carves a flat build platform: clears everything above the target level
  * within the footprint, and backfills any gaps below it, so a building
  * placed here never floats over a dip or buries itself in a hillside.
@@ -166,40 +247,58 @@ export function prepareSite(dimension, origin, facing, fMin, fMax, sMin, sMax, o
   const surfaceBlock = opts.surfaceBlock || "minecraft:grass_block";
   const fillBlock = opts.fillBlock || fillMaterialFor(opts.surfaceType);
 
-  const f1 = fMin - padding, f2 = fMax + padding;
-  const s1 = sMin - padding, s2 = sMax + padding;
+  // Callers building toward the town hall's back side (negative forward)
+  // naturally pass fMin/fMax the "wrong" way round for a plain west-to-east
+  // range (e.g. fMin=0, fMax=-12). Normalize here rather than push that
+  // burden onto every call site - the loop below needs true min <= max or
+  // it silently does nothing at all.
+  const trueFMin = Math.min(fMin, fMax), trueFMax = Math.max(fMin, fMax);
+  const trueSMin = Math.min(sMin, sMax), trueSMax = Math.max(sMin, sMax);
+  const f1 = trueFMin - padding, f2 = trueFMax + padding;
+  const s1 = trueSMin - padding, s2 = trueSMax + padding;
 
   for (let f = f1; f <= f2; f++) {
     for (let s = s1; s <= s2; s++) {
-      // Clear the air column above the platform
-      for (let up = 0; up < clearHeight; up++) {
-        const p = toWorld(origin, facing, f, s, up);
-        setBlock(dimension, p.x, p.y, p.z, "minecraft:air");
-      }
-      for (let up = clearHeight; up < clearHeight + treeMargin; up++) {
+      prepareColumn(dimension, origin, facing, f, s, clearHeight, treeMargin, surfaceBlock, fillBlock, fillDepth);
+    }
+  }
+
+  // A tree's canopy spreads well past its own trunk (2-3 blocks past the
+  // trunk column for most wood types), so felling every trunk inside
+  // f1..f2/s1..s2 above still leaves a ring of leaves just outside that
+  // rectangle with no log left to support them. Bedrock doesn't despawn
+  // those instantly - they sit there as orphaned leaf blocks and only
+  // clear out later via random-tick decay, which is exactly the "leaves
+  // keep dropping/lagging after the landscape changes" symptom: decay
+  // checks on a stray cluster of leaf blocks keep running for real-time
+  // minutes after every terrain edit. Sweep a wider leaves-only ring here
+  // (logs and terrain untouched) so canopy overhang is gone right away
+  // instead of decaying on its own. Run it as a background job rather
+  // than inline: prepareSite already does one big synchronous pass over
+  // f1..f2/s1..s2 (that's an accepted, tested cost), and simply widening
+  // that same synchronous loop by a margin on every call risks exactly
+  // the on-device watchdog hang that interiorFlattenJob below was already
+  // written to avoid for the (much bigger, but same shape of) wall sweep.
+  system.runJob(leafCanopyJob(dimension, origin, facing, f1, f2, s1, s2, clearHeight + treeMargin));
+}
+
+const LEAF_CANOPY_MARGIN = 4;
+
+/** Clears orphaned leaf blocks in a ring just outside a just-cleared footprint. */
+function* leafCanopyJob(dimension, origin, facing, f1, f2, s1, s2, height) {
+  const lf1 = f1 - LEAF_CANOPY_MARGIN, lf2 = f2 + LEAF_CANOPY_MARGIN;
+  const ls1 = s1 - LEAF_CANOPY_MARGIN, ls2 = s2 + LEAF_CANOPY_MARGIN;
+  let ops = 0;
+  for (let f = lf1; f <= lf2; f++) {
+    for (let s = ls1; s <= ls2; s++) {
+      if (f >= f1 && f <= f2 && s >= s1 && s <= s2) continue; // already swept synchronously above
+      for (let up = 0; up < height; up++) {
         const p = toWorld(origin, facing, f, s, up);
         let typeId = null;
         try { typeId = dimension.getBlock({ x: p.x, y: p.y, z: p.z })?.typeId; } catch (e) { continue; }
-        if (isTreePart(typeId) || isOreBlock(typeId)) {
-          setBlock(dimension, p.x, p.y, p.z, "minecraft:air");
-        }
-      }
-      // Lay the surface course, then backfill any hollow ground beneath it
-      const surface = toWorld(origin, facing, f, s, -1);
-      setBlock(dimension, surface.x, surface.y, surface.z, surfaceBlock);
-      for (let down = 2; down <= fillDepth + 1; down++) {
-        const p = toWorld(origin, facing, f, s, -down);
-        let existing = null;
-        try {
-          const block = dimension.getBlock({ x: p.x, y: p.y, z: p.z });
-          existing = block ? block.typeId : null;
-        } catch (e) {
-          continue;
-        }
-        // Only fill genuine voids (air/water/foliage); leave real stone alone
-        if (existing !== null && NOT_GROUND.has(existing)) {
-          setBlock(dimension, p.x, p.y, p.z, fillBlock);
-        }
+        if (isTreeLeaves(typeId)) setBlock(dimension, p.x, p.y, p.z, "minecraft:air");
+        ops++;
+        if (ops % 64 === 0) yield;
       }
     }
   }
@@ -239,11 +338,27 @@ export function prepareFortifiedArea(dimension, origin, facing, rect, protectedR
     sample(rect.fMin, s);
     sample(rect.fMax, s);
   }
+  // Sample the enclosed ground too, not just the ring. Sizing the clear
+  // height off the perimeter alone measured only the ground the wall
+  // itself stands on, so a hill or cliff sitting *inside* the ring was
+  // never measured at all: a village ringed by flat ground scored
+  // steep=false and cleared a mere 12 blocks up, leaving anything taller
+  // than that standing untouched in the middle of the finished village.
+  // That is the leftover terrain visible inside the palisade.
+  for (let f = rect.fMin + sampleStep; f <= rect.fMax - sampleStep; f += sampleStep * 2) {
+    for (let s = rect.sMin + sampleStep; s <= rect.sMax - sampleStep; s += sampleStep * 2) {
+      sample(f, s);
+    }
+  }
 
   const minY = heights.length ? Math.min(...heights) : origin.y - 1;
   const maxY = heights.length ? Math.max(...heights) : origin.y - 1;
   const steep = maxY - minY > 5;
-  const clearHeight = steep ? 28 : 12;
+  // Always clear high enough to take the tallest measured ground off,
+  // whatever the "steep" bucket says, with headroom for the couple of
+  // blocks a sampling grid can miss between its probes.
+  const overPlatform = Math.max(0, maxY - (origin.y - 1));
+  const clearHeight = Math.min(48, Math.max(steep ? 28 : 12, overPlatform + 6));
   const fillDepth = steep ? 12 : 6;
 
   // The interior terrain-flattening pass is the dominant cost here: a
@@ -257,9 +372,29 @@ export function prepareFortifiedArea(dimension, origin, facing, rect, protectedR
   // ticks via system.runJob rather than one unbroken synchronous loop - the
   // wall finishes immediately as before, and the enclosed ground finishes
   // flattening a moment later.
-  system.runJob(interiorFlattenJob(dimension, origin, facing, rect, clearHeight, fillDepth, protectedRects));
+  // The sweep runs for far longer than the wall build it accompanies, and
+  // every one of its writes goes through setBlock(), which swallows an
+  // unloaded-chunk error silently. Previously it borrowed whatever ticking
+  // area the caller happened to be holding; that area was released a fixed
+  // 400 ticks after the *wall* job drained, so on a full-size perimeter the
+  // sweep was still working when the ground it was writing to stopped being
+  // loaded, and the remainder no-opped without a single log line. Hold an
+  // area of its own and release it only once the job has actually finished.
+  const release = holdLoadedArea(dimension, origin, facing, rect);
+  system.runJob(releaseAfter(
+    interiorFlattenJob(dimension, origin, facing, rect, clearHeight, fillDepth, protectedRects),
+    release));
 
   return { steep, minY, maxY, clearHeight };
+}
+
+/** Drains a job to the end, then lets go of the ticking area it needed. */
+function* releaseAfter(job, release, holdTicks = 200) {
+  try {
+    yield* job;
+  } finally {
+    release(holdTicks);
+  }
 }
 
 /** The actual interior sweep, chunked so it never holds up a single tick for long. */
