@@ -278,13 +278,46 @@ let loadedAreaCounter = 0;
  * Best-effort: if /tickingarea can't be run (missing permission, older
  * engine, or the unit-test mock, which has no runCommand at all) the build
  * still runs exactly as before, just without the guarantee.
+ *
+ * The area is released `holdTicks` ticks AFTER fn() returns, not in the same
+ * tick. /tickingarea add does not load chunks synchronously - they stream in
+ * over the following ticks - so registering and removing the area inside one
+ * synchronous build gave the engine no window at all to load anything, and
+ * every deferred step that depends on it (buildFortifications' corner-tower
+ * retries, withRetry's guard/golem spawns, both scheduled tens of ticks out)
+ * ran against chunks that had already been let go again. That is why the
+ * far corners - the only part of a village that sits ~68 blocks out, past
+ * the default simulation distance - silently lost their towers.
  */
-export function withLoadedArea(dimension, origin, facing, rect, fn) {
+export function withLoadedArea(dimension, origin, facing, rect, fn, holdTicks = 400) {
+  const release = holdLoadedArea(dimension, origin, facing, rect);
+  try {
+    return fn();
+  } finally {
+    release(holdTicks);
+  }
+}
+
+/**
+ * Registers a ticking area over `rect` and hands back a release function.
+ * Call `release(holdTicks)` when the work is finished; the area then lives on
+ * for that many more ticks. Use this (rather than withLoadedArea) for work
+ * that outlives the call that started it - a system.runJob build, say.
+ *
+ * Bedrock caps a single ticking area at 100 chunks, so an oversized rect is
+ * split into a grid of areas rather than being rejected wholesale by the
+ * engine - a silent rejection is exactly the failure mode this is here to
+ * prevent.
+ */
+export function holdLoadedArea(dimension, origin, facing, rect) {
+  const names = [];
+  if (typeof dimension.runCommand !== "function") return () => {};
+
   const corners = [
-    toWorld(origin, facing, rect.fMin, rect.sMin, -32),
-    toWorld(origin, facing, rect.fMin, rect.sMax, -32),
-    toWorld(origin, facing, rect.fMax, rect.sMin, -32),
-    toWorld(origin, facing, rect.fMax, rect.sMax, -32)
+    toWorld(origin, facing, rect.fMin, rect.sMin, 0),
+    toWorld(origin, facing, rect.fMin, rect.sMax, 0),
+    toWorld(origin, facing, rect.fMax, rect.sMin, 0),
+    toWorld(origin, facing, rect.fMax, rect.sMax, 0)
   ];
   const x1 = Math.min(...corners.map(c => c.x)) - 2;
   const x2 = Math.max(...corners.map(c => c.x)) + 2;
@@ -292,25 +325,63 @@ export function withLoadedArea(dimension, origin, facing, rect, fn) {
   const z2 = Math.max(...corners.map(c => c.z)) + 2;
   const y1 = origin.y - 32, y2 = origin.y + 32;
 
-  const name = `gv_${loadedAreaCounter++}_${Date.now()}`;
-  let added = false;
-  try {
-    if (typeof dimension.runCommand === "function") {
-      dimension.runCommand(`tickingarea add ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${name}`);
-      added = true;
-    }
-  } catch (e) {
-    console.warn("[village] could not add ticking area: " + e);
-  }
-  try {
-    return fn();
-  } finally {
-    if (added) {
-      try { dimension.runCommand(`tickingarea remove ${name}`); } catch (e) {
-        console.warn("[village] could not remove ticking area: " + e);
+  // 9 chunks a side is 81 chunks - inside Bedrock's 100-chunk-per-area cap
+  // with room to spare for the padding rounding either way.
+  const SPAN = 9 * 16;
+  for (let x = x1; x <= x2; x += SPAN) {
+    for (let z = z1; z <= z2; z += SPAN) {
+      const name = `gv_${loadedAreaCounter++}`;
+      try {
+        dimension.runCommand(
+          `tickingarea add ${x} ${y1} ${z} ${Math.min(x + SPAN - 1, x2)} ${y2} ${Math.min(z + SPAN - 1, z2)} ${name}`);
+        names.push(name);
+      } catch (e) {
+        // The engine also caps the world at 10 ticking areas; once that is
+        // hit the rest of the grid simply is not covered. Nothing else to
+        // do about it here, and it must not abort the build.
+        console.warn("[village] could not add ticking area: " + e);
       }
     }
   }
+
+  let released = false;
+  return (holdTicks = 0) => {
+    if (released) return;
+    released = true;
+    for (const name of names) releaseLoadedArea(dimension, name, holdTicks);
+  };
+}
+
+// Bedrock allows only a handful of ticking areas per dimension, and holding
+// each one open for a while means several builds can overlap. Keep the held
+// set small by retiring the oldest as soon as a new one needs the room -
+// the oldest is also the one whose deferred work has had the longest to run.
+const heldAreas = [];
+const MAX_HELD_AREAS = 4;
+
+/** Drops a temporary ticking area, keeping it alive for `holdTicks` first. */
+function releaseLoadedArea(dimension, name, holdTicks) {
+  let released = false;
+  const remove = () => {
+    if (released) return;
+    released = true;
+    const at = heldAreas.findIndex((held) => held.name === name);
+    if (at >= 0) heldAreas.splice(at, 1);
+    try { dimension.runCommand(`tickingarea remove ${name}`); } catch (e) {
+      console.warn("[village] could not remove ticking area: " + e);
+    }
+  };
+  if (holdTicks > 0) {
+    try {
+      system.runTimeout(remove, holdTicks);
+      heldAreas.push({ name, remove });
+      while (heldAreas.length > MAX_HELD_AREAS) heldAreas.shift().remove();
+      return;
+    } catch (e) {
+      /* no scheduler available - fall through and release immediately */
+    }
+  }
+  remove();
 }
 
 /**
