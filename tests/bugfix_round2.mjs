@@ -3,7 +3,7 @@ import { buildMinerHouse, extendPath } from "./scripts/builder.js";
 import { buildFortifications, TIER_PALISADE, TIER_COBBLE } from "./scripts/walls.js";
 import { toWorld } from "./scripts/util.js";
 import { builtPlotFootprints } from "./scripts/levels.js";
-import { buildSpecialBuilding } from "./scripts/specials.js";
+import { buildSpecialBuilding, specialBuildingSpec } from "./scripts/specials.js";
 
 let failures = 0;
 function assert(cond, msg) { if (!cond) { failures++; console.error("FAIL:", msg); } else console.log("ok:", msg); }
@@ -92,10 +92,15 @@ console.log("\n=== alchemist shed gets a levelled platform instead of floating =
 {
   const origin = { x: -902000, y: 70, z: 0 };
   const facing = 0;
+  // Read the plot off the spec rather than hard-coding it: these buildings
+  // have moved once already (out of the wall line and in among the houses),
+  // and a test pinned to their old coordinates silently stops testing
+  // anything the moment they move again.
+  const spec = specialBuildingSpec("alchemist");
   // Dig a pit under the alchemist's footprint before it's built, the way a
   // natural dip in the terrain would look.
-  for (let f = 46; f <= 54; f++) {
-    for (let s = 3; s <= 13; s++) {
+  for (let f = spec.forward - 4; f <= spec.forward + 4; f++) {
+    for (let s = spec.side - 5; s <= spec.side + 5; s++) {
       const p = toWorld(origin, facing, f, s, -1);
       dim.getBlock(p).setType("minecraft:air");
     }
@@ -103,7 +108,7 @@ console.log("\n=== alchemist shed gets a levelled platform instead of floating =
   const state = { elder: null, origin, facing, id: "t" };
   const result = buildSpecialBuilding("alchemist", dim, state);
   assert(result.ok, `alchemist build reports ok (${result.reason || ""})`);
-  const underFloor = blockAt(dim, origin, facing, 50, 8, -1);
+  const underFloor = blockAt(dim, origin, facing, spec.forward, spec.side, -1);
   assert(underFloor !== "minecraft:air", `ground beneath the alchemist shed is no longer a hole (${underFloor})`);
 }
 

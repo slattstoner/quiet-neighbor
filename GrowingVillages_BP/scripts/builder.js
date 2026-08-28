@@ -649,10 +649,34 @@ export function buildMinerHouse(dimension, origin, facing, plotForward, side, pa
 // road's own gravel as unbuilt natural terrain and paves it back to grass.
 export const ROAD_HALF_WIDTH = 2;
 
+/**
+ * The founding campfire's plaza straddles the street: buildCampfire lays a
+ * 7x7 cobblestone pad centred on forward -6 with the fire itself, its log
+ * stools and its fence posts standing on the road centreline. The road
+ * skips those columns rather than paving through them - paving would
+ * re-clear the air above the pad and delete the fire and stools, and the
+ * pad already reads as paved ground where the street runs into it.
+ */
+export const CAMPFIRE_PLAZA = { fMin: -9, fMax: -3 };
+
 /** Builds one straight gravel road segment along the forward axis. */
 function roadSegment(placer, f1, f2) {
-  placer.box(f1, -ROAD_HALF_WIDTH, -1, f2, ROAD_HALF_WIDTH, -1, "minecraft:gravel");
-  placer.box(f1, -ROAD_HALF_WIDTH, 0, f2, ROAD_HALF_WIDTH, 3, "minecraft:air");
+  const from = Math.min(f1, f2), to = Math.max(f1, f2);
+  for (let f = from; f <= to; f++) {
+    if (f >= CAMPFIRE_PLAZA.fMin && f <= CAMPFIRE_PLAZA.fMax) continue;
+    placer.box(f, -ROAD_HALF_WIDTH, -1, f, ROAD_HALF_WIDTH, -1, "minecraft:gravel");
+    placer.box(f, -ROAD_HALF_WIDTH, 0, f, ROAD_HALF_WIDTH, 3, "minecraft:air");
+  }
+}
+
+/**
+ * Paves the street between two forward marks. Exported so the
+ * fortification build can run the road out to its gates (see walls.js) -
+ * the numbered levels only ever pave as far as the plot they are adding,
+ * which left the last stretch to each gate unpaved.
+ */
+export function paveRoad(dimension, origin, facing, fromForward, toForward) {
+  roadSegment(makePlacer(dimension, origin, facing), fromForward, toForward);
 }
 
 /**
@@ -661,14 +685,13 @@ function roadSegment(placer, f1, f2) {
  * it further from the town hall - forward (positive) for plots on that
  * side, backward (negative) for plots behind the town hall.
  *
- * Eastward (`toForward >= 0`) paving never starts before forward 0, the
- * town hall's own front door. Westward (`toForward < 0`) it never starts
- * closer than forward -10: the founding campfire sits right on the road
- * centerline between forward -10 and -3 (see buildCampfire), so starting
- * there instead of at 0 lets the road continue past the campfire without
- * re-clearing air over it and deleting the fire/log-stool blocks. The
- * campfire's own cobblestone/gravel pad already reads as paved ground, so
- * there's no visible gap where the road picks up.
+ * Paving always runs from the town hall's own door (forward 0) out to
+ * `toForward`, not just across the newly added stretch. Paving only the
+ * new stretch meant any column the previous level had missed stayed bare
+ * grass forever; re-running the whole side each time is idempotent and
+ * guarantees one unbroken street. `fromForward` is therefore only a hint
+ * about which way the street is growing. The campfire plaza is skipped by
+ * roadSegment itself (see CAMPFIRE_PLAZA).
  *
  * `protectedRects` (local f/s rectangles, e.g. from levels.js's
  * builtPlotFootprints()) are skipped by the lamp-post lattice below. The
@@ -680,8 +703,7 @@ function roadSegment(placer, f1, f2) {
 export function extendPath(dimension, origin, facing, fromForward, toForward, protectedRects) {
   const placer = makePlacer(dimension, origin, facing);
   const east = toForward >= 0;
-  const start = east ? Math.max(0, fromForward) : Math.min(-10, fromForward);
-  roadSegment(placer, start, toForward);
+  roadSegment(placer, 0, toForward);
   // The lamp-post lattice below is laid on a fixed 5-block grid with no
   // idea what's been built where. Skip any post whose column falls inside
   // any already-built (or about-to-be-built) plot - always at least the
@@ -691,9 +713,11 @@ export function extendPath(dimension, origin, facing, fromForward, toForward, pr
   const rects = protectedRects && protectedRects.length ? protectedRects : [{ fMin: -8, fMax: 10, sMin: -13, sMax: 14 }];
   const inProtectedRect = (f, s) => rects.some(r => f >= r.fMin && f <= r.fMax && s >= r.sMin && s <= r.sMax);
   const postS = ROAD_HALF_WIDTH + 1;
-  const latticeStart = east ? 0 : -10;
   const step = east ? 5 : -5;
-  for (let f = latticeStart; east ? f <= toForward : f >= toForward; f += step) {
+  for (let f = 0; east ? f <= toForward : f >= toForward; f += step) {
+    // The campfire plaza is its own lit space; a lamp post landing on its
+    // pad would crowd the fire and its stools.
+    if (f >= CAMPFIRE_PLAZA.fMin && f <= CAMPFIRE_PLAZA.fMax) continue;
     for (const s of [-postS, postS]) {
       if (inProtectedRect(f, s)) continue;
       placer.block(f, s, -1, "minecraft:cobblestone");

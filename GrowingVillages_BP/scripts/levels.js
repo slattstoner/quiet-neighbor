@@ -9,7 +9,7 @@ import {
 } from "./builder.js";
 import { TIER_PALISADE, TIER_COBBLE, TIER_CASTLE } from "./walls.js";
 import { buildCityBuilding } from "./city_buildings_11_15.js";
-import { SPECIAL_BUILDINGS } from "./specials.js";
+import { specialFootprintsUpTo } from "./specials.js";
 
 /**
  * Level 1 (town hall + campfire + first house) is built at founding and
@@ -191,16 +191,16 @@ export function maxForwardForLevel(level) {
  * house before this fix.
  */
 export function fullVillageMaxForward() {
-  // Special buildings (alchemist, oldtimer, ranger, healer, engineer) sit
-  // even further down the street than any numbered LEVELS entry - up to
-  // forward 60 - but aren't listed in LEVELS, so they were never counted
-  // here. The wall is sized once, from the very first fortification tier,
-  // to this single value; leaving specials out of it meant their sheds
-  // were built past the already-final wall ring (some of them entirely
-  // outside it, on unlevelled terrain), which is exactly what put the
-  // old-timer's house outside the palisade instead of inside the village.
-  const specialsMax = Math.max(0, ...Object.values(SPECIAL_BUILDINGS).map((spec) => spec.forward));
-  return Math.max(maxForwardForLevel(MAX_BETA_LEVEL), specialsMax);
+  // Deliberately NOT widened to cover the special buildings. An earlier
+  // attempt at the "old-timer's house is out in the wall" report grew the
+  // perimeter to reach them instead of moving them, which took the wall
+  // ring from radius 48 to 70 - nearly doubling the enclosed area the
+  // interior sweep has to flatten, pushing the gates ~20 blocks further
+  // from the last paved road, and needing a 2x2 grid of ticking areas
+  // where one used to do (Bedrock allows only a handful per world). The
+  // specials are placed on their own plots inside this footprint instead;
+  // see SPECIAL_BUILDINGS in specials.js.
+  return maxForwardForLevel(MAX_BETA_LEVEL);
 }
 
 export function requirementsText(level) {
@@ -284,5 +284,12 @@ export function builtPlotFootprints(uptoLevel) {
     const rect = plotFootprint(level);
     if (rect) rects.push(rect);
   }
+  // Special buildings now stand inside the wall alongside the houses, so
+  // the interior sweep can reach them - and their log corner posts read as
+  // tree trunks to it, so an unprotected shed would lose its whole frame to
+  // the next wall tier. Each plot joins the list only once its building can
+  // exist (see SPECIAL_BUILDINGS' unlockLevel), so earlier tiers still
+  // flatten that ground with the rest of the village.
+  rects.push(...specialFootprintsUpTo(uptoLevel));
   return rects;
 }

@@ -1,7 +1,7 @@
 import { system } from "@minecraft/server";
 import { setBlock, toWorld } from "./util.js";
-import { makePlacer, stairs, facingBlock, placeDoor } from "./builder.js";
-import { prepareFortifiedArea, supportWallFoundation, holdLoadedArea } from "./terrain.js";
+import { makePlacer, stairs, facingBlock, placeDoor, paveRoad, CAMPFIRE_PLAZA, ROAD_HALF_WIDTH } from "./builder.js";
+import { prepareFortifiedArea, supportWallFoundation, holdLoadedArea, prepareCorridorJob } from "./terrain.js";
 
 /**
  * Fortifications are rebuilt in place as the village advances, so each
@@ -253,10 +253,21 @@ function buildGateway(placer, rect, tier) {
       placer.block(p.f, p.s, spec.height, accent);
       placer.block(p.f, p.s, spec.height + 1, block);
     }
-    // Clear the passage itself, full width.
+    // Clear the passage itself, full width, and floor it.
+    //
+    // The floor is the fix for the trench that used to sit in every
+    // gateway. The main ring loop skips gateway positions wholesale, and
+    // that loop is what lays each ring column down to up=-1 and calls
+    // supportWallFoundation() beneath it - so the five columns of the
+    // opening got neither. On any ground that was not already exactly at
+    // the village platform height, the result was a gap in the ground at
+    // the gate with the wall's own foundation standing proud either side
+    // of it: a trench you dropped into on the way out of the village.
     for (let offset = -2; offset <= 2; offset++) {
       const p = at(offset);
       for (let up = 0; up <= spec.height - 1; up++) placer.block(p.f, p.s, up, "minecraft:air");
+      placer.block(p.f, p.s, -1, "minecraft:gravel");
+      supportWallFoundation(placer.dimension, placer.origin, placer.facing, p.f, p.s, "minecraft:dirt");
     }
     if (tier !== TIER_PALISADE) {
       for (const offset of [-3, 3]) {
@@ -568,12 +579,43 @@ export function buildFortifications(dimension, origin, facing, maxForward, tier,
   // while longer so the tower retries and the guard spawns still land.
   const release = holdLoadedArea(dimension, origin, facing, rect);
   const job = fortificationJob(dimension, origin, facing, rect, tier, terrain);
-  system.runJob(drainThenRelease(job, release));
+  system.runJob(drainThenRelease(chainJobs(job, gateRoadJob(dimension, origin, facing, rect)), release));
 
   return {
     rect, tier, terrain,
     towers: corners(rect).map((corner) => towerResult(origin, facing, towerGeometry(corner, tier)))
   };
+}
+
+/** Runs several jobs back to back as one job. */
+function* chainJobs(...jobs) {
+  for (const job of jobs) yield* job;
+}
+
+/**
+ * Levels and paves the street from gate to gate.
+ *
+ * The numbered levels only ever pave as far as the plot they are adding
+ * (the furthest is forward 38), while the gates sit on the perimeter at
+ * +/-48 - so the last ten blocks up to each gate were never road at all,
+ * and the ground there was never levelled either, because the road
+ * corridor is deliberately excluded from the interior terrain sweep (that
+ * sweep cannot tell placed road gravel from natural gravel and used to
+ * repaint the finished street as grass). Nothing owned that stretch. This
+ * does: it is the fortification's job to connect its own gates to the
+ * town, and it re-runs harmlessly at every later tier.
+ */
+function* gateRoadJob(dimension, origin, facing, rect) {
+  const inPlaza = (f) => f >= CAMPFIRE_PLAZA.fMin && f <= CAMPFIRE_PLAZA.fMax;
+  yield* prepareCorridorJob(dimension, origin, facing,
+    rect.fMin + 1, rect.fMax - 1, -ROAD_HALF_WIDTH, ROAD_HALF_WIDTH, {
+      clearHeight: 8,
+      fillDepth: 5,
+      surfaceBlock: "minecraft:gravel",
+      skipF: inPlaza
+    });
+  yield;
+  paveRoad(dimension, origin, facing, rect.fMin + 1, rect.fMax - 1);
 }
 
 /** Runs a build job to the end, then releases the ticking area it needed. */
