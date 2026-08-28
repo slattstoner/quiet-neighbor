@@ -25,7 +25,7 @@
 ```bash
 cd tests
 cp -r ../GrowingVillages_BP/scripts ./scripts   # синхронизировать код
-for f in lint run integration geometry roof fixes features polish; do
+for f in lint run integration geometry roof fixes features polish wall_corner_repair; do
   echo "=== $f ==="; node "$f.mjs"
 done
 ```

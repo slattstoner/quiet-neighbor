@@ -1,6 +1,6 @@
 import { setBlock, toWorld } from "./util.js";
 import { makePlacer, stairs, facingBlock, placeDoor } from "./builder.js";
-import { prepareFortifiedArea, supportWallFoundation } from "./terrain.js";
+import { prepareFortifiedArea, supportWallFoundation, withRetry } from "./terrain.js";
 
 /**
  * Fortifications are rebuilt in place as the village advances, so each
@@ -106,6 +106,33 @@ function outwardCardinal(placer, edge) {
  * silhouette of a real stockade rather than a flat-topped fence, and a
  * plank fighting-walk runs along the inside so guards can stand on it.
  */
+/** One post of the palisade. Pulled out of buildPalisade so a corner repair can redraw a single cell. */
+function palisadePostCell(placer, spec, pos) {
+  // Alternating 4/3-high posts, with a short spike on the tall ones
+  const tall = ((pos.f + pos.s) % 2 === 0);
+  const postTop = tall ? spec.height : spec.height - 1;
+  placer.box(pos.f, pos.s, -1, pos.f, pos.s, postTop, spec.wallBlock);
+  if (tall) {
+    // Fence on top reads as a sharpened tip from a distance
+    placer.block(pos.f, pos.s, postTop + 1, "minecraft:oak_fence");
+  }
+}
+
+/** One cell of the inner fighting-walk: planks one block in from the palisade, with a rail. */
+function palisadeWalkCell(placer, spec, pos) {
+  const inF = pos.edge === "fMin" ? pos.f + 1 : pos.edge === "fMax" ? pos.f - 1 : pos.f;
+  const inS = pos.edge === "sMin" ? pos.s + 1 : pos.edge === "sMax" ? pos.s - 1 : pos.s;
+  placer.block(inF, inS, spec.walkUp, "minecraft:oak_planks");
+  // support post underneath every few blocks
+  if ((pos.f + pos.s) % 4 === 0) {
+    placer.box(inF, inS, 0, inF, inS, spec.walkUp - 1, "minecraft:oak_fence");
+  }
+  const railF = pos.edge === "fMin" ? inF + 1 : pos.edge === "fMax" ? inF - 1 : inF;
+  const railS = pos.edge === "sMin" ? inS + 1 : pos.edge === "sMax" ? inS - 1 : inS;
+  placer.block(railF, railS, spec.walkUp, "minecraft:oak_planks");
+  placer.block(railF, railS, spec.walkUp + 1, "minecraft:oak_fence");
+}
+
 function buildPalisade(dimension, origin, facing, rect, gateForward) {
   const placer = makePlacer(dimension, origin, facing);
   const spec = TIER_SPEC[TIER_PALISADE];
@@ -113,30 +140,12 @@ function buildPalisade(dimension, origin, facing, rect, gateForward) {
 
   for (const pos of positions) {
     if (isGateway(pos, rect, gateForward)) continue;
-    // Alternating 4/3-high posts, with a short spike on the tall ones
-    const tall = ((pos.f + pos.s) % 2 === 0);
-    const postTop = tall ? spec.height : spec.height - 1;
-    placer.box(pos.f, pos.s, -1, pos.f, pos.s, postTop, spec.wallBlock);
-    if (tall) {
-      // Fence on top reads as a sharpened tip from a distance
-      placer.block(pos.f, pos.s, postTop + 1, "minecraft:oak_fence");
-    }
+    palisadePostCell(placer, spec, pos);
   }
 
-  // Inner fighting-walk: planks one block in from the palisade, with a rail
   for (const pos of positions) {
     if (isGateway(pos, rect, gateForward)) continue;
-    const inF = pos.edge === "fMin" ? pos.f + 1 : pos.edge === "fMax" ? pos.f - 1 : pos.f;
-    const inS = pos.edge === "sMin" ? pos.s + 1 : pos.edge === "sMax" ? pos.s - 1 : pos.s;
-    placer.block(inF, inS, spec.walkUp, "minecraft:oak_planks");
-    // support post underneath every few blocks
-    if ((pos.f + pos.s) % 4 === 0) {
-      placer.box(inF, inS, 0, inF, inS, spec.walkUp - 1, "minecraft:oak_fence");
-    }
-    const railF = pos.edge === "fMin" ? inF + 1 : pos.edge === "fMax" ? inF - 1 : inF;
-    const railS = pos.edge === "sMin" ? inS + 1 : pos.edge === "sMax" ? inS - 1 : inS;
-    placer.block(railF, railS, spec.walkUp, "minecraft:oak_planks");
-    placer.block(railF, railS, spec.walkUp + 1, "minecraft:oak_fence");
+    palisadeWalkCell(placer, spec, pos);
   }
 
   buildGateway(placer, rect, TIER_PALISADE);
@@ -144,6 +153,22 @@ function buildPalisade(dimension, origin, facing, rect, gateForward) {
 }
 
 /** TIER 2 - Cobblestone curtain wall with a walkway and a wall-block parapet. */
+/** One wall cell for the cobble tier. Pulled out of buildCobbleWall so a corner repair can redraw a single cell. */
+function cobbleCell(placer, spec, pos) {
+  placer.box(pos.f, pos.s, -1, pos.f, pos.s, spec.height - 1, spec.wallBlock);
+  // Parapet along the outer face
+  placer.block(pos.f, pos.s, spec.height, "minecraft:cobblestone_wall");
+  // Walkway one block in
+  const inF = pos.edge === "fMin" ? pos.f + 1 : pos.edge === "fMax" ? pos.f - 1 : pos.f;
+  const inS = pos.edge === "sMin" ? pos.s + 1 : pos.edge === "sMax" ? pos.s - 1 : pos.s;
+  placer.box(inF, inS, -1, inF, inS, spec.walkUp - 1, spec.wallBlock);
+  placer.block(inF, inS, spec.walkUp, "minecraft:stone_brick_slab");
+  // torch every so often along the walk
+  if ((pos.f + pos.s) % 7 === 0) {
+    placer.block(inF, inS, spec.walkUp + 1, "minecraft:torch");
+  }
+}
+
 function buildCobbleWall(dimension, origin, facing, rect, gateForward) {
   const placer = makePlacer(dimension, origin, facing);
   const spec = TIER_SPEC[TIER_COBBLE];
@@ -151,18 +176,7 @@ function buildCobbleWall(dimension, origin, facing, rect, gateForward) {
 
   for (const pos of positions) {
     if (isGateway(pos, rect, gateForward)) continue;
-    placer.box(pos.f, pos.s, -1, pos.f, pos.s, spec.height - 1, spec.wallBlock);
-    // Parapet along the outer face
-    placer.block(pos.f, pos.s, spec.height, "minecraft:cobblestone_wall");
-    // Walkway one block in
-    const inF = pos.edge === "fMin" ? pos.f + 1 : pos.edge === "fMax" ? pos.f - 1 : pos.f;
-    const inS = pos.edge === "sMin" ? pos.s + 1 : pos.edge === "sMax" ? pos.s - 1 : pos.s;
-    placer.box(inF, inS, -1, inF, inS, spec.walkUp - 1, spec.wallBlock);
-    placer.block(inF, inS, spec.walkUp, "minecraft:stone_brick_slab");
-    // torch every so often along the walk
-    if ((pos.f + pos.s) % 7 === 0) {
-      placer.block(inF, inS, spec.walkUp + 1, "minecraft:torch");
-    }
+    cobbleCell(placer, spec, pos);
   }
 
   buildGateway(placer, rect, TIER_COBBLE);
@@ -173,6 +187,36 @@ function buildCobbleWall(dimension, origin, facing, rect, gateForward) {
  * TIER 3 - Castle curtain wall: stone brick, taller, with proper merlons
  * (alternating raised crenellations) and arrow slits at chest height.
  */
+/** One wall cell for the castle tier. Pulled out of buildCastleWall so a corner repair can redraw a single cell. */
+function castleCell(placer, spec, pos) {
+  placer.box(pos.f, pos.s, -1, pos.f, pos.s, spec.height - 1, spec.wallBlock);
+
+  // Merlons: raise every other block so the top reads as battlements
+  const merlon = ((pos.f + pos.s) % 2 === 0);
+  if (merlon) {
+    placer.block(pos.f, pos.s, spec.height, spec.wallBlock);
+    placer.block(pos.f, pos.s, spec.height + 1, "minecraft:stone_brick_slab");
+  }
+  // Arrow slit in the embrasures
+  if (!merlon && (pos.f + pos.s) % 6 === 0) {
+    placer.block(pos.f, pos.s, spec.height - 2, "minecraft:air");
+  }
+
+  // Walkway behind the battlements
+  const inF = pos.edge === "fMin" ? pos.f + 1 : pos.edge === "fMax" ? pos.f - 1 : pos.f;
+  const inS = pos.edge === "sMin" ? pos.s + 1 : pos.edge === "sMax" ? pos.s - 1 : pos.s;
+  placer.box(inF, inS, -1, inF, inS, spec.walkUp - 1, spec.wallBlock);
+  placer.block(inF, inS, spec.walkUp, "minecraft:stone_bricks");
+  // Inner rail so guards don't walk off the back
+  const railF = pos.edge === "fMin" ? inF + 1 : pos.edge === "fMax" ? inF - 1 : inF;
+  const railS = pos.edge === "sMin" ? inS + 1 : pos.edge === "sMax" ? inS - 1 : inS;
+  placer.block(railF, railS, spec.walkUp, "minecraft:stone_bricks");
+  placer.block(railF, railS, spec.walkUp + 1, "minecraft:stone_brick_wall");
+  if ((pos.f + pos.s) % 9 === 0) {
+    placer.block(railF, railS, spec.walkUp + 2, "minecraft:lantern", { hanging: false });
+  }
+}
+
 function buildCastleWall(dimension, origin, facing, rect, gateForward) {
   const placer = makePlacer(dimension, origin, facing);
   const spec = TIER_SPEC[TIER_CASTLE];
@@ -180,32 +224,7 @@ function buildCastleWall(dimension, origin, facing, rect, gateForward) {
 
   for (const pos of positions) {
     if (isGateway(pos, rect, gateForward)) continue;
-    placer.box(pos.f, pos.s, -1, pos.f, pos.s, spec.height - 1, spec.wallBlock);
-
-    // Merlons: raise every other block so the top reads as battlements
-    const merlon = ((pos.f + pos.s) % 2 === 0);
-    if (merlon) {
-      placer.block(pos.f, pos.s, spec.height, spec.wallBlock);
-      placer.block(pos.f, pos.s, spec.height + 1, "minecraft:stone_brick_slab");
-    }
-    // Arrow slit in the embrasures
-    if (!merlon && (pos.f + pos.s) % 6 === 0) {
-      placer.block(pos.f, pos.s, spec.height - 2, "minecraft:air");
-    }
-
-    // Walkway behind the battlements
-    const inF = pos.edge === "fMin" ? pos.f + 1 : pos.edge === "fMax" ? pos.f - 1 : pos.f;
-    const inS = pos.edge === "sMin" ? pos.s + 1 : pos.edge === "sMax" ? pos.s - 1 : pos.s;
-    placer.box(inF, inS, -1, inF, inS, spec.walkUp - 1, spec.wallBlock);
-    placer.block(inF, inS, spec.walkUp, "minecraft:stone_bricks");
-    // Inner rail so guards don't walk off the back
-    const railF = pos.edge === "fMin" ? inF + 1 : pos.edge === "fMax" ? inF - 1 : inF;
-    const railS = pos.edge === "sMin" ? inS + 1 : pos.edge === "sMax" ? inS - 1 : inS;
-    placer.block(railF, railS, spec.walkUp, "minecraft:stone_bricks");
-    placer.block(railF, railS, spec.walkUp + 1, "minecraft:stone_brick_wall");
-    if ((pos.f + pos.s) % 9 === 0) {
-      placer.block(railF, railS, spec.walkUp + 2, "minecraft:lantern", { hanging: false });
-    }
+    castleCell(placer, spec, pos);
   }
 
   buildGateway(placer, rect, TIER_CASTLE);
@@ -362,6 +381,87 @@ export function buildTower(dimension, origin, facing, corner, tier) {
 }
 
 /**
+ * How far along each wall arm from a corner a repair pass redraws, in
+ * blocks. Deliberately wider than one Bedrock chunk (16) plus margin: the
+ * corner itself can land anywhere inside its chunk, so an unloaded chunk
+ * can leave a gap starting right at the corner and reaching up to ~16
+ * blocks down either arm before crossing into an already-loaded chunk.
+ */
+const CORNER_REPAIR_REACH = 24;
+
+/** Ring positions within `reach` of `corner`, walking inward along both arms that meet there. */
+function positionsNearCorner(rect, corner, reach) {
+  const sEdge = corner.s === rect.sMin ? "sMin" : "sMax";
+  const fEdge = corner.f === rect.fMin ? "fMin" : "fMax";
+  const fDir = corner.f === rect.fMin ? 1 : -1;
+  const sDir = corner.s === rect.sMin ? 1 : -1;
+  const out = [];
+  for (let i = 0; i <= reach; i++) {
+    const f = corner.f + i * fDir;
+    if (f < rect.fMin || f > rect.fMax) break;
+    out.push({ f, s: corner.s, edge: sEdge });
+  }
+  // i starts at 1: the corner cell itself was already added by the loop above
+  for (let i = 1; i <= reach; i++) {
+    const s = corner.s + i * sDir;
+    if (s < rect.sMin || s > rect.sMax) break;
+    out.push({ f: corner.f, s, edge: fEdge });
+  }
+  return out;
+}
+
+/**
+ * Redraws the wall (and its ground support) for a stretch around one
+ * corner, then rebuilds that corner's tower on top. Used to self-heal a
+ * corner that came up short because its chunk hadn't finished loading the
+ * first time - see buildFortifications below. Every write here is the
+ * same idempotent per-cell logic the initial build used, so re-running it
+ * once the chunk is actually available reproduces exactly what the first
+ * pass would have produced.
+ */
+function repairCorner(dimension, origin, facing, rect, tier, corner) {
+  const placer = makePlacer(dimension, origin, facing);
+  const spec = TIER_SPEC[tier];
+  const positions = positionsNearCorner(rect, corner, CORNER_REPAIR_REACH);
+  const foundationBlock = tier === TIER_PALISADE ? "minecraft:oak_log" : "minecraft:cobblestone";
+
+  for (const pos of positions) {
+    if (!isGateway(pos, rect)) {
+      supportWallFoundation(dimension, origin, facing, pos.f, pos.s, foundationBlock);
+    }
+  }
+  for (const pos of positions) {
+    if (isGateway(pos, rect)) continue;
+    if (tier === TIER_PALISADE) {
+      palisadePostCell(placer, spec, pos);
+      palisadeWalkCell(placer, spec, pos);
+    } else if (tier === TIER_COBBLE) {
+      cobbleCell(placer, spec, pos);
+    } else {
+      castleCell(placer, spec, pos);
+    }
+  }
+  return buildTower(dimension, origin, facing, corner, tier);
+}
+
+/**
+ * True if this corner's tower actually landed: its outward corner post
+ * (placed at up=0 by buildTower's own shaft-post loop) reads back as the
+ * tier's post material. This is the single farthest, most
+ * chunk-loading-vulnerable cell of the whole ring, so it doubles as a
+ * canary for "did this corner build at all".
+ */
+function cornerBuilt(dimension, origin, facing, corner, tier) {
+  try {
+    const p = toWorld(origin, facing, corner.f, corner.s, 0);
+    const block = dimension.getBlock(p);
+    return !!block && block.typeId === TIER_SPEC[tier].towerPost;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
  * Builds (or upgrades to) a fortification tier: clears whatever ring was
  * there before, raises the new wall and puts four watchtowers on the
  * corners. Returns the tower guard positions so the caller can station
@@ -407,5 +507,31 @@ export function buildFortifications(dimension, origin, facing, maxForward, tier,
       console.warn("[village] tower build failed: " + e);
     }
   }
+
+  // The ring and its four corner towers can sit 40-60+ blocks out - the
+  // farthest points inside the /tickingarea that withLoadedArea registers
+  // around this whole build (see village.js). That command streams chunks
+  // in over the following ticks rather than synchronously (see
+  // withLoadedArea's own comment in terrain.js), so every write above can
+  // silently no-op at a corner whose chunk hadn't caught up yet: setBlock
+  // swallows LocationInUnloadedChunkError on purpose, so nothing here ever
+  // throws to say so. That is exactly "wall missing at the corners, towers
+  // built as halves" - the corners are simply the farthest, most
+  // chunk-loading-vulnerable cells on the whole perimeter.
+  //
+  // Verify each corner actually landed and self-heal any that didn't, the
+  // same way guard/golem spawns nearby already recover from this via
+  // withRetry: retry a few times with growing delays, giving the chunk
+  // time to finish loading, before giving up.
+  for (const corner of corners(rect)) {
+    withRetry(() => {
+      if (cornerBuilt(dimension, origin, facing, corner, tier)) return;
+      repairCorner(dimension, origin, facing, rect, tier, corner);
+      if (!cornerBuilt(dimension, origin, facing, corner, tier)) {
+        throw new Error(`[village] corner (${corner.f},${corner.s}) still incomplete after a repair attempt`);
+      }
+    });
+  }
+
   return { rect, towers, tier, terrain };
 }
