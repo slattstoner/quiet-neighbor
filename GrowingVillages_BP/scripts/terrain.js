@@ -345,9 +345,24 @@ export function withLoadedArea(dimension, origin, facing, rect, fn) {
     return fn();
   } finally {
     if (added) {
-      try { dimension.runCommand(`tickingarea remove ${name}`); } catch (e) {
-        console.warn("[village] could not remove ticking area: " + e);
-      }
+      // fn() commonly schedules withRetry() follow-ups (guard/golem spawns,
+      // wall corner/tower verification) that only run 40-340 ticks later,
+      // once a freshly-registered ticking area has actually had time to
+      // stream its chunks in. Removing the area synchronously right here -
+      // the same tick it was added, before fn()'s own synchronous portion
+      // has even had a chance to see the area finish loading - tore it down
+      // long before any of those retries got to run inside it, so they hit
+      // the exact same not-yet-loaded chunks and failed again just as
+      // silently. That is why a village's wall corners (the ring positions
+      // furthest from wherever the build was triggered, and so the most
+      // likely to still be loading) kept coming up with gaps even after the
+      // retry logic was added. Keep the area alive long enough to cover the
+      // full retry chain (40+100+200 = 340 ticks) plus real margin instead.
+      system.runTimeout(() => {
+        try { dimension.runCommand(`tickingarea remove ${name}`); } catch (e) {
+          console.warn("[village] could not remove ticking area: " + e);
+        }
+      }, 400);
     }
   }
 }
