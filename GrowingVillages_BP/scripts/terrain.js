@@ -278,8 +278,18 @@ let loadedAreaCounter = 0;
  * Best-effort: if /tickingarea can't be run (missing permission, older
  * engine, or the unit-test mock, which has no runCommand at all) the build
  * still runs exactly as before, just without the guarantee.
+ *
+ * The area is released `holdTicks` ticks AFTER fn() returns, not in the same
+ * tick. /tickingarea add does not load chunks synchronously - they stream in
+ * over the following ticks - so registering and removing the area inside one
+ * synchronous build gave the engine no window at all to load anything, and
+ * every deferred step that depends on it (buildFortifications' corner-tower
+ * retries, withRetry's guard/golem spawns, both scheduled tens of ticks out)
+ * ran against chunks that had already been let go again. That is why the
+ * far corners - the only part of a village that sits ~68 blocks out, past
+ * the default simulation distance - silently lost their towers.
  */
-export function withLoadedArea(dimension, origin, facing, rect, fn) {
+export function withLoadedArea(dimension, origin, facing, rect, fn, holdTicks = 400) {
   const corners = [
     toWorld(origin, facing, rect.fMin, rect.sMin, -32),
     toWorld(origin, facing, rect.fMin, rect.sMax, -32),
@@ -305,12 +315,40 @@ export function withLoadedArea(dimension, origin, facing, rect, fn) {
   try {
     return fn();
   } finally {
-    if (added) {
-      try { dimension.runCommand(`tickingarea remove ${name}`); } catch (e) {
-        console.warn("[village] could not remove ticking area: " + e);
-      }
+    if (added) releaseLoadedArea(dimension, name, holdTicks);
+  }
+}
+
+// Bedrock allows only a handful of ticking areas per dimension, and holding
+// each one open for a while means several builds can overlap. Keep the held
+// set small by retiring the oldest as soon as a new one needs the room -
+// the oldest is also the one whose deferred work has had the longest to run.
+const heldAreas = [];
+const MAX_HELD_AREAS = 4;
+
+/** Drops a temporary ticking area, keeping it alive for `holdTicks` first. */
+function releaseLoadedArea(dimension, name, holdTicks) {
+  let released = false;
+  const remove = () => {
+    if (released) return;
+    released = true;
+    const at = heldAreas.findIndex((held) => held.name === name);
+    if (at >= 0) heldAreas.splice(at, 1);
+    try { dimension.runCommand(`tickingarea remove ${name}`); } catch (e) {
+      console.warn("[village] could not remove ticking area: " + e);
+    }
+  };
+  if (holdTicks > 0) {
+    try {
+      system.runTimeout(remove, holdTicks);
+      heldAreas.push({ name, remove });
+      while (heldAreas.length > MAX_HELD_AREAS) heldAreas.shift().remove();
+      return;
+    } catch (e) {
+      /* no scheduler available - fall through and release immediately */
     }
   }
+  remove();
 }
 
 /**

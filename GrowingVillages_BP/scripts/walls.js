@@ -1,3 +1,4 @@
+import { system } from "@minecraft/server";
 import { setBlock, toWorld } from "./util.js";
 import { makePlacer, stairs, facingBlock, placeDoor } from "./builder.js";
 import { prepareFortifiedArea, supportWallFoundation } from "./terrain.js";
@@ -249,6 +250,34 @@ function buildGateway(placer, rect, tier) {
 }
 
 /**
+ * The tower's footprint and key levels, derived from the corner alone. Pure
+ * arithmetic with no world access, so it stays valid even when the actual
+ * block placement failed against an unloaded chunk - which is what lets
+ * ensureTower() verify and retry a build, and lets the caller station a
+ * guard at a position it can trust.
+ */
+export function towerGeometry(corner, tier) {
+  const spec = TIER_SPEC[tier];
+  const height = spec.height + 4;
+  // Pull the tower footprint inward so it sits on the corner, not outside it
+  const fDir = corner.f < 0 ? 1 : -1;
+  const sDir = corner.s < 0 ? 1 : -1;
+  const f1 = corner.f, f2 = corner.f + fDir * 4;
+  const s1 = corner.s, s2 = corner.s + sDir * 4;
+  const fMin = Math.min(f1, f2), fMax = Math.max(f1, f2);
+  const sMin = Math.min(s1, s2), sMax = Math.max(s1, s2);
+  const shaftTop = height - 2;
+  const roomUp = height - 1;
+  return {
+    fMin, fMax, sMin, sMax, fDir, sDir, height, shaftTop, roomUp,
+    midF: Math.round((fMin + fMax) / 2),
+    midS: Math.round((sMin + sMax) / 2),
+    roofBase: roomUp + 3,
+    top: height + 4
+  };
+}
+
+/**
  * A corner watchtower with a real guard post on top: an enclosed room with
  * window slits, a pitched roof, a ladder up the inside, a brazier and a
  * bed, so the guard stationed there has somewhere to actually be.
@@ -264,15 +293,24 @@ export function buildTower(dimension, origin, facing, corner, tier) {
   const roofSolid = tier === TIER_PALISADE ? "minecraft:oak_planks" : "minecraft:stone_bricks";
   const height = spec.height + 4;
 
-  const f0 = corner.f, s0 = corner.s;
-  // Pull the tower footprint inward so it sits on the corner, not outside it
-  const fDir = f0 < 0 ? 1 : -1;
-  const sDir = s0 < 0 ? 1 : -1;
-  const f1 = f0, f2 = f0 + fDir * 4;
-  const s1 = s0, s2 = s0 + sDir * 4;
-  const fMin = Math.min(f1, f2), fMax = Math.max(f1, f2);
-  const sMin = Math.min(s1, s2), sMax = Math.max(s1, s2);
-  const midF = Math.round((fMin + fMax) / 2), midS = Math.round((sMin + sMax) / 2);
+  const geom = towerGeometry(corner, tier);
+  const { fMin, fMax, sMin, sMax, sDir, midF, midS } = geom;
+
+  // clearRing() only sweeps two blocks either side of the ring line, but the
+  // tower reaches four blocks inward, so its two innermost rows kept whatever
+  // hillside stood there and the tower came out half-buried. Clear the whole
+  // footprint (and the previous tier's tower with it) before raising it.
+  placer.box(fMin, sMin, 0, fMax, sMax, geom.top, "minecraft:air");
+  // Carry every footprint column down to real ground. The ring line gets this
+  // from supportWallFoundation(), but the four inward rows the tower stands on
+  // got nothing, so on a slope or at a shoreline the tower sat on a one-block
+  // slab over open air - the "half a tower" look.
+  const foundationBlock = tier === TIER_PALISADE ? "minecraft:oak_log" : "minecraft:cobblestone";
+  for (let f = fMin; f <= fMax; f++) {
+    for (let s = sMin; s <= sMax; s++) {
+      supportWallFoundation(dimension, origin, facing, f, s, foundationBlock);
+    }
+  }
 
   // Foundation and hollow interior
   placer.box(fMin, sMin, -1, fMax, sMax, -1, body);
@@ -281,7 +319,7 @@ export function buildTower(dimension, origin, facing, corner, tier) {
   // Shaft walls: corner posts full height, panel infill between them, and
   // a couple of window slits - the same framed look the houses use,
   // instead of one solid block of material.
-  const shaftTop = height - 2;
+  const shaftTop = geom.shaftTop;
   for (const [f, s] of [[fMin, sMin], [fMin, sMax], [fMax, sMin], [fMax, sMax]]) {
     placer.box(f, s, 0, f, s, shaftTop, post);
   }
@@ -314,7 +352,7 @@ export function buildTower(dimension, origin, facing, corner, tier) {
   }
 
   // Guard room floor at the top of the shaft
-  const roomUp = height - 1;
+  const roomUp = geom.roomUp;
   placer.box(fMin + 1, sMin + 1, roomUp - 1, fMax - 1, sMax - 1, roomUp - 1, roofSolid);
   placer.block(ladF, ladS, roomUp - 1, "minecraft:air");
 
@@ -331,7 +369,7 @@ export function buildTower(dimension, origin, facing, corner, tier) {
   }
 
   // Pyramid roof from stairs on all four sides
-  const roofBase = roomUp + 3;
+  const roofBase = geom.roofBase;
   const outN = ["north", "south", "west", "east"];
   for (let i = 0; i < 2; i++) {
     const a = fMin + i, b = fMax - i, c = sMin + i, d = sMax - i;
@@ -357,8 +395,91 @@ export function buildTower(dimension, origin, facing, corner, tier) {
   // Banner on the outward face of the tower
   placer.block(midF, sMin, roomUp + 2, "minecraft:air");
 
-  const stand = toWorld(origin, facing, midF, midS + (sDir), roomUp);
-  return { standAt: { x: stand.x + 0.5, y: stand.y, z: stand.z + 0.5 }, fMin, fMax, sMin, sMax, roomUp };
+  return towerResult(origin, facing, geom);
+}
+
+/** The caller-facing description of a tower: guard stand plus its footprint. */
+function towerResult(origin, facing, geom) {
+  const stand = toWorld(origin, facing, geom.midF, geom.midS + geom.sDir, geom.roomUp);
+  return {
+    standAt: { x: stand.x + 0.5, y: stand.y, z: stand.z + 0.5 },
+    fMin: geom.fMin, fMax: geom.fMax, sMin: geom.sMin, sMax: geom.sMax, roomUp: geom.roomUp
+  };
+}
+
+/**
+ * Structural blocks that must exist for a tower to count as finished: one
+ * post per opposite corner of the shaft, one infill panel on each of the two
+ * faces that never carry the door, a guard-room corner and the roof apex.
+ * Together they span the whole footprint and the full height, so any missing
+ * chunk shows up here whichever way a chunk boundary cut the tower.
+ */
+function towerProbes(geom, tier) {
+  const spec = TIER_SPEC[tier];
+  const roofSolid = tier === TIER_PALISADE ? "minecraft:oak_planks" : "minecraft:stone_bricks";
+  return [
+    { f: geom.fMin, s: geom.sMin, up: geom.shaftTop, typeId: spec.towerPost },
+    { f: geom.fMax, s: geom.sMax, up: geom.shaftTop, typeId: spec.towerPost },
+    { f: geom.midF - 1, s: geom.sMin, up: 1, typeId: spec.towerInfill },
+    { f: geom.fMin, s: geom.midS, up: 1, typeId: spec.towerInfill },
+    { f: geom.fMax, s: geom.sMax, up: geom.roomUp + 2, typeId: spec.towerBlock },
+    { f: geom.midF, s: geom.midS, up: geom.roofBase + 2, typeId: roofSolid }
+  ];
+}
+
+/** True only if the tower actually landed in the world, all the way up. */
+function towerIsComplete(dimension, origin, facing, geom, tier) {
+  for (const probe of towerProbes(geom, tier)) {
+    const p = toWorld(origin, facing, probe.f, probe.s, probe.up);
+    let typeId = null;
+    try {
+      typeId = dimension.getBlock(p)?.typeId;
+    } catch (e) {
+      return false; // chunk still not loaded - nothing was written here
+    }
+    if (typeId !== probe.typeId) return false;
+  }
+  return true;
+}
+
+// Spread out far enough to cover a /tickingarea that has only just been
+// registered (chunks stream in over the following ticks) and still finish
+// well inside the window withLoadedArea now holds that area open for.
+const TOWER_RETRY_TICKS = [20, 60, 140, 240, 340];
+
+/**
+ * Builds a corner tower and checks it is really there, retrying on a backoff
+ * if it is not.
+ *
+ * The corner towers sit ~68 blocks diagonally from the town hall - further
+ * out than anything else a village builds, and past the default simulation
+ * distance - so their chunks are routinely still loading while the level-up
+ * runs. setBlock()/fillBox() swallow the resulting LocationInUnloadedChunkError
+ * by design, so the whole tower, or whatever part of it fell on the far side
+ * of a chunk boundary, used to vanish without a trace: the "only four posts,
+ * or half a tower" that showed up at every tier. Placement is idempotent, so
+ * a retry simply finishes the job once the chunk is there.
+ */
+export function ensureTower(dimension, origin, facing, corner, tier, delaysTicks) {
+  const geom = towerGeometry(corner, tier);
+  const attempt = (remaining) => {
+    try {
+      buildTower(dimension, origin, facing, corner, tier);
+    } catch (e) {
+      console.warn("[village] tower build failed: " + e);
+    }
+    if (towerIsComplete(dimension, origin, facing, geom, tier)) return;
+    if (remaining.length === 0) {
+      console.warn(`[village] corner tower at f=${corner.f} s=${corner.s} still incomplete after retries`);
+      return;
+    }
+    const [next, ...rest] = remaining;
+    system.runTimeout(() => attempt(rest), next);
+  };
+  attempt(delaysTicks || TOWER_RETRY_TICKS);
+  // Geometry is pure arithmetic, so the guard post is known even while the
+  // blocks are still being retried; spawnTowerGuard has its own retry.
+  return towerResult(origin, facing, geom);
 }
 
 /**
@@ -402,7 +523,7 @@ export function buildFortifications(dimension, origin, facing, maxForward, tier,
   const towers = [];
   for (const corner of corners(rect)) {
     try {
-      towers.push(buildTower(dimension, origin, facing, corner, tier));
+      towers.push(ensureTower(dimension, origin, facing, corner, tier));
     } catch (e) {
       console.warn("[village] tower build failed: " + e);
     }
