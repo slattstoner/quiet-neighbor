@@ -166,8 +166,15 @@ export function prepareSite(dimension, origin, facing, fMin, fMax, sMin, sMax, o
   const surfaceBlock = opts.surfaceBlock || "minecraft:grass_block";
   const fillBlock = opts.fillBlock || fillMaterialFor(opts.surfaceType);
 
-  const f1 = fMin - padding, f2 = fMax + padding;
-  const s1 = sMin - padding, s2 = sMax + padding;
+  // Callers building toward the town hall's back side (negative forward)
+  // naturally pass fMin/fMax the "wrong" way round for a plain west-to-east
+  // range (e.g. fMin=0, fMax=-12). Normalize here rather than push that
+  // burden onto every call site - the loop below needs true min <= max or
+  // it silently does nothing at all.
+  const trueFMin = Math.min(fMin, fMax), trueFMax = Math.max(fMin, fMax);
+  const trueSMin = Math.min(sMin, sMax), trueSMax = Math.max(sMin, sMax);
+  const f1 = trueFMin - padding, f2 = trueFMax + padding;
+  const s1 = trueSMin - padding, s2 = trueSMax + padding;
 
   for (let f = f1; f <= f2; f++) {
     for (let s = s1; s <= s2; s++) {
@@ -200,6 +207,46 @@ export function prepareSite(dimension, origin, facing, fMin, fMax, sMin, sMax, o
         if (existing !== null && NOT_GROUND.has(existing)) {
           setBlock(dimension, p.x, p.y, p.z, fillBlock);
         }
+      }
+    }
+  }
+
+  // A tree's canopy spreads well past its own trunk (2-3 blocks past the
+  // trunk column for most wood types), so felling every trunk inside
+  // f1..f2/s1..s2 above still leaves a ring of leaves just outside that
+  // rectangle with no log left to support them. Bedrock doesn't despawn
+  // those instantly - they sit there as orphaned leaf blocks and only
+  // clear out later via random-tick decay, which is exactly the "leaves
+  // keep dropping/lagging after the landscape changes" symptom: decay
+  // checks on a stray cluster of leaf blocks keep running for real-time
+  // minutes after every terrain edit. Sweep a wider leaves-only ring here
+  // (logs and terrain untouched) so canopy overhang is gone right away
+  // instead of decaying on its own. Run it as a background job rather
+  // than inline: prepareSite already does one big synchronous pass over
+  // f1..f2/s1..s2 (that's an accepted, tested cost), and simply widening
+  // that same synchronous loop by a margin on every call risks exactly
+  // the on-device watchdog hang that interiorFlattenJob below was already
+  // written to avoid for the (much bigger, but same shape of) wall sweep.
+  system.runJob(leafCanopyJob(dimension, origin, facing, f1, f2, s1, s2, clearHeight + treeMargin));
+}
+
+const LEAF_CANOPY_MARGIN = 4;
+
+/** Clears orphaned leaf blocks in a ring just outside a just-cleared footprint. */
+function* leafCanopyJob(dimension, origin, facing, f1, f2, s1, s2, height) {
+  const lf1 = f1 - LEAF_CANOPY_MARGIN, lf2 = f2 + LEAF_CANOPY_MARGIN;
+  const ls1 = s1 - LEAF_CANOPY_MARGIN, ls2 = s2 + LEAF_CANOPY_MARGIN;
+  let ops = 0;
+  for (let f = lf1; f <= lf2; f++) {
+    for (let s = ls1; s <= ls2; s++) {
+      if (f >= f1 && f <= f2 && s >= s1 && s <= s2) continue; // already swept synchronously above
+      for (let up = 0; up < height; up++) {
+        const p = toWorld(origin, facing, f, s, up);
+        let typeId = null;
+        try { typeId = dimension.getBlock({ x: p.x, y: p.y, z: p.z })?.typeId; } catch (e) { continue; }
+        if (isTreeLeaves(typeId)) setBlock(dimension, p.x, p.y, p.z, "minecraft:air");
+        ops++;
+        if (ops % 64 === 0) yield;
       }
     }
   }

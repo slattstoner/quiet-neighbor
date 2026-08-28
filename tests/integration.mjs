@@ -100,5 +100,24 @@ for (const b of builtShapes) {
 }
 assert(foundJobSites >= 3, `craftsman houses contain their job-site blocks (${foundJobSites})`);
 
+// The street is a single through-road, growing east for plots at positive
+// plotForward and west (behind the town hall) for plots at negative
+// plotForward - see extendPath()'s doc comment in builder.js. Levels 4-7
+// build behind the town hall, so the paved road must reach all the way
+// out to their plots too, not just stop at the town hall's front door.
+let missingRoad = 0;
+for (let f = 1; f <= 38; f++) {
+  const p = toWorld(origin, facing, f, 0, -1);
+  if (blockAt(elder.dimension, p.x, p.y, p.z) !== "minecraft:gravel") missingRoad++;
+}
+// Skip -10..-3: that span is the founding campfire's own courtyard
+// (cobblestone with a small gravel firepit patch), not part of the paved
+// road proper - see buildCampfire().
+for (let f = -26; f <= -11; f++) {
+  const p = toWorld(origin, facing, f, 0, -1);
+  if (blockAt(elder.dimension, p.x, p.y, p.z) !== "minecraft:gravel") missingRoad++;
+}
+assert(missingRoad === 0, `the through-road is paved continuously on both sides of the town hall (${missingRoad} gap(s))`);
+
 console.log(failures === 0 ? "\nALL INTEGRATION TESTS PASSED" : `\n${failures} INTEGRATION TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

@@ -83,6 +83,19 @@ console.log("\n=== crop patch is reachable ===");
     }
   }
   assert(gaps >= 2, `crop patch fence has at least one opening on each long side (found ${gaps})`);
+
+  // The irrigation channel's cobblestone banks used to be drawn on the
+  // exact same two rows as the crop patch itself (patchDepth=2 leaves only
+  // 3 rows total: crop/channel/crop), overwriting the farmland under both
+  // crop rows with cobblestone and popping every wheat block on spawn.
+  let nonFarmland = 0;
+  for (const s of [pMin, pMax]) {
+    for (let f = shape.f1; f <= shape.f2; f++) {
+      const p = toWorld(origin, 0, f, s, -1);
+      if (blockAt(dim, p.x, p.y, p.z) !== "minecraft:farmland") nonFarmland++;
+    }
+  }
+  assert(nonFarmland === 0, `both crop rows still stand on farmland, not cobblestone (${nonFarmland} bad tile(s))`);
 }
 
 console.log("\n=== wall never needs to grow through a later building ===");

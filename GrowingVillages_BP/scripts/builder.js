@@ -432,14 +432,19 @@ export function buildFarmerHouse(dimension, origin, facing, plotForward, side, p
   const pMin = Math.min(patchNear, patchFar), pMax = Math.max(patchNear, patchFar);
   placer.box(shape.f1, pMin, -1, shape.f2, pMax, -1, "minecraft:farmland", { moisturized_amount: 7 });
   placer.box(shape.f1, pMin, 0, shape.f2, pMax, 0, "minecraft:wheat", { growth: 7 });
-  // A contained one-block irrigation channel. The old open channel let
-  // water flow out of the plot on sloped terrain. Cobblestone banks and end
-  // caps keep the source blocks inside the farm footprint.
+  // A contained one-block irrigation channel down the middle row, with
+  // cobblestone end caps stopping it flowing out lengthwise. The channel
+  // row itself already overwrites the middle row's farmland (that's the
+  // point - it's the water source), but with patchDepth=2 the middle row
+  // sits directly between the two crop rows (pMin/pMax), so cobblestone
+  // banks along the s-axis are NOT needed to contain it: farmland is solid
+  // and blocks flow on its own. Placing them anyway (as an earlier version
+  // did) landed exactly on the pMin/pMax crop rows, replacing their
+  // farmland with cobblestone and popping every wheat block planted above
+  // it the instant the village spawned.
   const midPatch = Math.round((pMin + pMax) / 2);
   placer.box(shape.f1, midPatch, -1, shape.f2, midPatch, -1, "minecraft:water");
   placer.box(shape.f1, midPatch, 0, shape.f2, midPatch, 0, "minecraft:air");
-  placer.box(shape.f1, midPatch - 1, -1, shape.f2, midPatch - 1, -1, "minecraft:cobblestone");
-  placer.box(shape.f1, midPatch + 1, -1, shape.f2, midPatch + 1, -1, "minecraft:cobblestone");
   placer.block(shape.f1 - 1, midPatch, -1, "minecraft:cobblestone");
   placer.block(shape.f2 + 1, midPatch, -1, "minecraft:cobblestone");
   // Fence ring around the patch, with a gap in the middle of each long
@@ -638,8 +643,11 @@ export function buildMinerHouse(dimension, origin, facing, plotForward, side, pa
 
 // The road is a single straight gravel strip along the forward axis,
 // 5 wide (side -2..2), with no centerline accent - plain gravel per the
-// vanilla-village-plot look this mod is going for.
-const ROAD_HALF_WIDTH = 2;
+// vanilla-village-plot look this mod is going for. Exported so levels.js
+// can size a matching protected rect for the fortification interior sweep
+// (see builtPlotFootprints()) - without it, the sweep reclassifies the
+// road's own gravel as unbuilt natural terrain and paves it back to grass.
+export const ROAD_HALF_WIDTH = 2;
 
 /** Builds one straight gravel road segment along the forward axis. */
 function roadSegment(placer, f1, f2) {
@@ -649,28 +657,43 @@ function roadSegment(placer, f1, f2) {
 
 /**
  * Extends the village's single main street. `toForward` is the current
- * street length; each level-up grows it further from the town hall.
+ * street length in whichever direction it's growing; each level-up grows
+ * it further from the town hall - forward (positive) for plots on that
+ * side, backward (negative) for plots behind the town hall.
+ *
+ * Eastward (`toForward >= 0`) paving never starts before forward 0, the
+ * town hall's own front door. Westward (`toForward < 0`) it never starts
+ * closer than forward -10: the founding campfire sits right on the road
+ * centerline between forward -10 and -3 (see buildCampfire), so starting
+ * there instead of at 0 lets the road continue past the campfire without
+ * re-clearing air over it and deleting the fire/log-stool blocks. The
+ * campfire's own cobblestone/gravel pad already reads as paved ground, so
+ * there's no visible gap where the road picks up.
  *
  * `protectedRects` (local f/s rectangles, e.g. from levels.js's
  * builtPlotFootprints()) are skipped by the lamp-post lattice below. The
- * lattice is redrawn on every call across the *entire* 0..toForward span,
- * not just the newly extended segment, so without this it would silently
- * plant a fence post and a lantern inside whichever house's wall happened
- * to land on the fixed 5-block grid.
+ * lattice is redrawn on every call across the *entire* start..toForward
+ * span, not just the newly extended segment, so without this it would
+ * silently plant a fence post and a lantern inside whichever house's wall
+ * happened to land on the fixed 5-block grid.
  */
 export function extendPath(dimension, origin, facing, fromForward, toForward, protectedRects) {
   const placer = makePlacer(dimension, origin, facing);
-  const start = Math.max(0, fromForward);
+  const east = toForward >= 0;
+  const start = east ? Math.max(0, fromForward) : Math.min(-10, fromForward);
   roadSegment(placer, start, toForward);
   // The lamp-post lattice below is laid on a fixed 5-block grid with no
   // idea what's been built where. Skip any post whose column falls inside
   // any already-built (or about-to-be-built) plot - always at least the
-  // town hall, which is close enough to the street to collide on most
-  // level configurations, plus every plot the caller knows about.
-  const rects = protectedRects && protectedRects.length ? protectedRects : [{ fMin: -1, fMax: 9, sMin: -13, sMax: 14 }];
+  // town hall/campfire/starter house area, which is close enough to the
+  // street to collide on most level configurations, plus every plot the
+  // caller knows about.
+  const rects = protectedRects && protectedRects.length ? protectedRects : [{ fMin: -8, fMax: 10, sMin: -13, sMax: 14 }];
   const inProtectedRect = (f, s) => rects.some(r => f >= r.fMin && f <= r.fMax && s >= r.sMin && s <= r.sMax);
   const postS = ROAD_HALF_WIDTH + 1;
-  for (let f = 0; f <= toForward; f += 5) {
+  const latticeStart = east ? 0 : -10;
+  const step = east ? 5 : -5;
+  for (let f = latticeStart; east ? f <= toForward : f >= toForward; f += step) {
     for (const s of [-postS, postS]) {
       if (inProtectedRect(f, s)) continue;
       placer.block(f, s, -1, "minecraft:cobblestone");

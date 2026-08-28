@@ -46,16 +46,32 @@ function applyVanillaProfession(entity, professionName) {
  */
 
 /**
- * Binds an entity to a home point. A background loop keeps it within
- * `radius` blocks, which is how the elder stays inside the town hall and
- * craftsmen stay in their shops instead of wandering into the sea.
+ * Records an entity's home point. By default a background loop also keeps
+ * it within `radius` blocks, which is how the elder stays inside the town
+ * hall, guards stay on their post and golems don't chase a raid over the
+ * horizon.
+ *
+ * Pass `{ tether: false }` to record the home point without the position
+ * leash - used for ordinary residents/craftsmen, who should be bound to
+ * their house only through the bed vanilla villagers already claim there,
+ * not through a radius check. The old radius tether fought vanilla's own
+ * wander/socialize goals: it yanked a villager back to its spawn point
+ * mid-stroll, which interrupted the goal without ever satisfying it, so
+ * the villager immediately picked the same kind of destination again and
+ * walked straight back out - reading as a villager stuck rattling its own
+ * door, teleporting in place. Letting vanilla own daytime wandering (it
+ * already keeps a villager close to its claimed bed and job site on its
+ * own) removes both the stuck-door loop and the teleport spam, at the
+ * cost of losing the safety net for a villager wandering into open water
+ * or off a cliff - the same risk any vanilla village on that terrain has.
  */
-export function setHome(entity, location, radius) {
+export function setHome(entity, location, radius, options) {
   entity.setDynamicProperty(HOME_X, location.x);
   entity.setDynamicProperty(HOME_Y, location.y);
   entity.setDynamicProperty(HOME_Z, location.z);
   entity.setDynamicProperty(HOME_R, radius);
-  entity.addTag("village_tethered");
+  const tether = !options || options.tether !== false;
+  if (tether) entity.addTag("village_tethered");
 }
 
 export function getHome(entity) {
@@ -90,11 +106,10 @@ export function spawnCraftsman(dimension, location, professionName, villageId, r
   const roleId = CRAFTSMAN_ROLE_IDS[professionName];
   if (roleId) npc.setDynamicProperty("village:roleId", roleId);
   applyVanillaProfession(npc, professionName);
-  // Eight blocks comfortably covers the bed and workstation in every 7×7
-  // house with room to step out the door without an immediate snap-back.
-  // Workers with an outdoor work area receive a larger radius from
-  // village.js.
-  setHome(npc, location, radius === undefined ? 8 : radius);
+  // Home point is still recorded (radius kept for callers/future use), but
+  // untethered - see setHome's doc comment. The villager's own bed, placed
+  // right there in its house, is what actually keeps it coming back.
+  setHome(npc, location, radius === undefined ? 8 : radius, { tether: false });
   return npc;
 }
 
@@ -103,7 +118,7 @@ export function spawnResident(dimension, location, villageId, radius) {
   npc.nameTag = coloredName("Житель", COLORS.villager);
   npc.addTag("village:" + villageId);
   npc.addTag("village_npc");
-  setHome(npc, location, radius === undefined ? 8 : radius);
+  setHome(npc, location, radius === undefined ? 8 : radius, { tether: false });
   return npc;
 }
 

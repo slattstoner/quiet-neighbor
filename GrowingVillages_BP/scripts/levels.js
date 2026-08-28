@@ -4,10 +4,12 @@ import {
   buildCartographerHouse,
   buildMinerHouse,
   buildPlainHouse,
-  extendPath
+  extendPath,
+  ROAD_HALF_WIDTH
 } from "./builder.js";
 import { TIER_PALISADE, TIER_COBBLE, TIER_CASTLE } from "./walls.js";
 import { buildCityBuilding } from "./city_buildings_11_15.js";
+import { SPECIAL_BUILDINGS } from "./specials.js";
 
 /**
  * Level 1 (town hall + campfire + first house) is built at founding and
@@ -46,8 +48,12 @@ export const LEVELS = {
     requirements: { "minecraft:paper": 12, "minecraft:oak_planks": 20 },
     plotForward: -12,
     side: -10,
-    pathFrom: 12,
-    pathTo: 22,
+    // This plot sits behind the town hall (negative forward), not further
+    // down the L2/L3 street - the path has to grow the other way to reach
+    // it. See extendPath()'s doc comment for why westward paving starts at
+    // -10 rather than 0.
+    pathFrom: 0,
+    pathTo: -12,
     build: buildCartographerHouse,
     npc: { professionName: "Картограф" }
   },
@@ -56,8 +62,8 @@ export const LEVELS = {
     requirements: { "minecraft:oak_log": 48, "minecraft:oak_planks": 32 },
     plotForward: -12,
     side: 10,
-    pathFrom: 12,
-    pathTo: 22,
+    pathFrom: 0,
+    pathTo: -12,
     build: buildPlainHouse,
     npc: null,
     fortify: TIER_PALISADE,
@@ -68,8 +74,8 @@ export const LEVELS = {
     requirements: { "minecraft:cobblestone": 64, "minecraft:iron_ingot": 8, "minecraft:torch": 16 },
     plotForward: -26,
     side: 10,
-    pathFrom: 22,
-    pathTo: 32,
+    pathFrom: -12,
+    pathTo: -26,
     build: buildMinerHouse,
     npc: { professionName: "Шахтёр", worker: true }
   },
@@ -78,8 +84,8 @@ export const LEVELS = {
     requirements: { "minecraft:oak_planks": 32, "minecraft:cobblestone": 24, "minecraft:glass_pane": 6 },
     plotForward: -26,
     side: -10,
-    pathFrom: 22,
-    pathTo: 32,
+    pathFrom: -12,
+    pathTo: -26,
     build: buildPlainHouse,
     npc: null
   },
@@ -88,8 +94,10 @@ export const LEVELS = {
     requirements: { "minecraft:cobblestone": 128, "minecraft:stone_bricks": 32, "minecraft:torch": 16 },
     plotForward: 26,
     side: -10,
-    pathFrom: 32,
-    pathTo: 42,
+    // Back on the east side - the street there was only ever paved to 12
+    // (by L2/L3), so this has to bridge from there, not from 32.
+    pathFrom: 12,
+    pathTo: 26,
     build: buildPlainHouse,
     npc: null,
     fortify: TIER_COBBLE,
@@ -100,8 +108,8 @@ export const LEVELS = {
     requirements: { "minecraft:oak_planks": 40, "minecraft:iron_ingot": 12, "minecraft:glass_pane": 8 },
     plotForward: 26,
     side: 10,
-    pathFrom: 32,
-    pathTo: 42,
+    pathFrom: 12,
+    pathTo: 26,
     build: buildPlainHouse,
     npc: null
   },
@@ -114,8 +122,8 @@ export const LEVELS = {
     },
     plotForward: 38,
     side: -10,
-    pathFrom: 42,
-    pathTo: 52,
+    pathFrom: 26,
+    pathTo: 38,
     build: buildPlainHouse,
     npc: null,
     fortify: TIER_CASTLE,
@@ -183,7 +191,16 @@ export function maxForwardForLevel(level) {
  * house before this fix.
  */
 export function fullVillageMaxForward() {
-  return maxForwardForLevel(MAX_BETA_LEVEL);
+  // Special buildings (alchemist, oldtimer, ranger, healer, engineer) sit
+  // even further down the street than any numbered LEVELS entry - up to
+  // forward 60 - but aren't listed in LEVELS, so they were never counted
+  // here. The wall is sized once, from the very first fortification tier,
+  // to this single value; leaving specials out of it meant their sheds
+  // were built past the already-final wall ring (some of them entirely
+  // outside it, on unlevelled terrain), which is exactly what put the
+  // old-timer's house outside the palisade instead of inside the village.
+  const specialsMax = Math.max(0, ...Object.values(SPECIAL_BUILDINGS).map((spec) => spec.forward));
+  return Math.max(maxForwardForLevel(MAX_BETA_LEVEL), specialsMax);
 }
 
 export function requirementsText(level) {
@@ -239,13 +256,30 @@ function plotFootprint(level) {
 }
 
 /**
+ * The paved main street's own corridor, sized to the village's full final
+ * extent in both directions (like the wall itself - see
+ * fullVillageMaxForward()'s doc comment). Without this, the fortification
+ * interior sweep (terrain.js's interiorFlattenJob) reclassifies the road's
+ * gravel as unbuilt natural terrain the moment it falls outside
+ * DOWNTOWN_FOOTPRINT and repaves it as grass on every later fortify tier -
+ * which is why the street used to end abruptly a few blocks past the town
+ * hall once the village had a wall, instead of reaching every plot it
+ * actually connects.
+ */
+function roadCorridor() {
+  const reach = fullVillageMaxForward() + 10;
+  return { fMin: -reach, fMax: reach, sMin: -ROAD_HALF_WIDTH, sMax: ROAD_HALF_WIDTH };
+}
+
+/**
  * Every plot footprint built up to and including `uptoLevel`, plus the
- * town hall/first house/campfire area. Used to keep the fortification
- * interior-terrain sweep from ever touching ground a house already stands
- * on (see terrain.js's interiorFlattenJob).
+ * town hall/first house/campfire area and the street itself. Used to keep
+ * the fortification interior-terrain sweep from ever touching ground a
+ * house (or the road) already occupies (see terrain.js's
+ * interiorFlattenJob).
  */
 export function builtPlotFootprints(uptoLevel) {
-  const rects = [DOWNTOWN_FOOTPRINT];
+  const rects = [DOWNTOWN_FOOTPRINT, roadCorridor()];
   for (let level = 2; level <= uptoLevel; level++) {
     const rect = plotFootprint(level);
     if (rect) rects.push(rect);
