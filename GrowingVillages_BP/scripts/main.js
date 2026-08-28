@@ -7,6 +7,7 @@ import { startTetherLoop, repairGolem } from "./npc.js";
 import { startProductionLoop } from "./production.js";
 import { startExplorationVillageLoop } from "./worldgen.js";
 import { startSpecialContentLoop } from "./special_content.js";
+import { startFortificationRepairLoop } from "./fortification_repair.js";
 
 const ORACLE_BELL_ID = "village:oracle_bell";
 const LEVEL_BELL_TARGETS = new Map([
@@ -111,10 +112,25 @@ world.beforeEvents.playerInteractWithEntity.subscribe((event) => {
 // file is first evaluated) throws and takes the entire pack down with it,
 // so all start-up work is deferred into system.run.
 system.run(() => {
+  // Bedrock terminates the whole script runtime when one tick hangs past the
+  // watchdog threshold (3000 ms) - which is how a heavy build used to take
+  // the pack down mid-structure, losing whatever was still unbuilt. Every
+  // heavy pass now runs as a system.runJob, so this should never fire;
+  // surviving it if it ever does beats losing the village to one slow tick.
+  try {
+    system.beforeEvents.watchdogTerminate.subscribe((event) => {
+      event.cancel = true;
+      console.warn("[village] watchdog termination cancelled: " + event.terminateReason);
+    });
+  } catch (e) {
+    /* older engines have no watchdogTerminate event - nothing to guard */
+  }
+
   startAmbientDialogue();
   startTetherLoop();
   startProductionLoop();
   startExplorationVillageLoop();
   startSpecialContentLoop();
+  startFortificationRepairLoop();
   world.sendMessage("§7[Growing Villages] бета загружена.");
 });

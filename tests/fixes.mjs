@@ -332,7 +332,10 @@ console.log("\n=== progression + professions ===");
   const stillLeaves = elder.dimension.getBlock(probe).typeId === "minecraft:oak_leaves";
   assert(stillLeaves, "before the captured job is pumped at all: interior terrain is untouched (proves the sweep did not run synchronously inside tryLevelUp)");
 
-  const job = capturedJobs[capturedJobs.length - 1];
+  // capturedJobs[0] is the interior sweep (prepareFortifiedArea schedules it
+  // first); the fortification build itself is a job too, and is captured
+  // after it. Both must yield rather than run to completion in one pump.
+  const job = capturedJobs[0];
   let steps = 0;
   const stepLimit = 5;
   let stepResult = job.next();
@@ -340,6 +343,10 @@ console.log("\n=== progression + professions ===");
   assert(!stepResult.done, `job yields control periodically instead of running to completion in one pump (stopped after ${steps} steps)`);
 
   while (!stepResult.done) stepResult = job.next();
+  for (const other of capturedJobs.slice(1)) {
+    let s = other.next();
+    while (!s.done) s = other.next();
+  }
   const clearedAfterFullDrain = elder.dimension.getBlock(probe).typeId !== "minecraft:oak_leaves";
   assert(clearedAfterFullDrain, "once the job is fully drained, the interior terrain is cleared exactly as a synchronous pass would have left it");
 }

@@ -1,7 +1,7 @@
 import { system } from "@minecraft/server";
 import { setBlock, toWorld } from "./util.js";
 import { makePlacer, stairs, facingBlock, placeDoor } from "./builder.js";
-import { prepareFortifiedArea, supportWallFoundation } from "./terrain.js";
+import { prepareFortifiedArea, supportWallFoundation, holdLoadedArea } from "./terrain.js";
 
 /**
  * Fortifications are rebuilt in place as the village advances, so each
@@ -73,11 +73,18 @@ function isGateway(pos, rect, gateForward) {
   return false;
 }
 
+// How many ring positions (or footprint columns) one job slice handles before
+// handing the tick back. Sized to the same order as terrain.js's interior
+// sweep: a few hundred block calls, well under the watchdog's 100ms spike
+// threshold even on a phone.
+const SLICE = 8;
+
 /** Clears the whole fortification volume so a new tier can replace the old one. */
-export function clearRing(dimension, origin, facing, rect, maxHeight) {
+export function* clearRingJob(dimension, origin, facing, rect, maxHeight) {
   const placer = makePlacer(dimension, origin, facing);
   const positions = ringPositions(rect);
   const height = maxHeight || 12;
+  let done = 0;
   for (const pos of positions) {
     for (let d = -2; d <= 2; d++) {
       // clear a band either side of the ring line so towers and walkways go too
@@ -87,7 +94,13 @@ export function clearRing(dimension, origin, facing, rect, maxHeight) {
         placer.block(f, s, up, "minecraft:air");
       }
     }
+    if (++done % SLICE === 0) yield;
   }
+}
+
+/** Synchronous clearRing, kept for callers that are not driving a job. */
+export function clearRing(dimension, origin, facing, rect, maxHeight) {
+  for (const _ of clearRingJob(dimension, origin, facing, rect, maxHeight)) { /* drain */ }
 }
 
 /** Outward compass direction for a ring edge, used to orient stairs/ladders. */
@@ -107,10 +120,11 @@ function outwardCardinal(placer, edge) {
  * silhouette of a real stockade rather than a flat-topped fence, and a
  * plank fighting-walk runs along the inside so guards can stand on it.
  */
-function buildPalisade(dimension, origin, facing, rect, gateForward) {
+function* palisadeJob(dimension, origin, facing, rect, gateForward) {
   const placer = makePlacer(dimension, origin, facing);
   const spec = TIER_SPEC[TIER_PALISADE];
   const positions = ringPositions(rect);
+  let done = 0;
 
   for (const pos of positions) {
     if (isGateway(pos, rect, gateForward)) continue;
@@ -122,6 +136,7 @@ function buildPalisade(dimension, origin, facing, rect, gateForward) {
       // Fence on top reads as a sharpened tip from a distance
       placer.block(pos.f, pos.s, postTop + 1, "minecraft:oak_fence");
     }
+    if (++done % SLICE === 0) yield;
   }
 
   // Inner fighting-walk: planks one block in from the palisade, with a rail
@@ -138,6 +153,7 @@ function buildPalisade(dimension, origin, facing, rect, gateForward) {
     const railS = pos.edge === "sMin" ? inS + 1 : pos.edge === "sMax" ? inS - 1 : inS;
     placer.block(railF, railS, spec.walkUp, "minecraft:oak_planks");
     placer.block(railF, railS, spec.walkUp + 1, "minecraft:oak_fence");
+    if (++done % SLICE === 0) yield;
   }
 
   buildGateway(placer, rect, TIER_PALISADE);
@@ -145,10 +161,11 @@ function buildPalisade(dimension, origin, facing, rect, gateForward) {
 }
 
 /** TIER 2 - Cobblestone curtain wall with a walkway and a wall-block parapet. */
-function buildCobbleWall(dimension, origin, facing, rect, gateForward) {
+function* cobbleWallJob(dimension, origin, facing, rect, gateForward) {
   const placer = makePlacer(dimension, origin, facing);
   const spec = TIER_SPEC[TIER_COBBLE];
   const positions = ringPositions(rect);
+  let done = 0;
 
   for (const pos of positions) {
     if (isGateway(pos, rect, gateForward)) continue;
@@ -164,6 +181,7 @@ function buildCobbleWall(dimension, origin, facing, rect, gateForward) {
     if ((pos.f + pos.s) % 7 === 0) {
       placer.block(inF, inS, spec.walkUp + 1, "minecraft:torch");
     }
+    if (++done % SLICE === 0) yield;
   }
 
   buildGateway(placer, rect, TIER_COBBLE);
@@ -174,10 +192,11 @@ function buildCobbleWall(dimension, origin, facing, rect, gateForward) {
  * TIER 3 - Castle curtain wall: stone brick, taller, with proper merlons
  * (alternating raised crenellations) and arrow slits at chest height.
  */
-function buildCastleWall(dimension, origin, facing, rect, gateForward) {
+function* castleWallJob(dimension, origin, facing, rect, gateForward) {
   const placer = makePlacer(dimension, origin, facing);
   const spec = TIER_SPEC[TIER_CASTLE];
   const positions = ringPositions(rect);
+  let done = 0;
 
   for (const pos of positions) {
     if (isGateway(pos, rect, gateForward)) continue;
@@ -207,6 +226,7 @@ function buildCastleWall(dimension, origin, facing, rect, gateForward) {
     if ((pos.f + pos.s) % 9 === 0) {
       placer.block(railF, railS, spec.walkUp + 2, "minecraft:lantern", { hanging: false });
     }
+    if (++done % SLICE === 0) yield;
   }
 
   buildGateway(placer, rect, TIER_CASTLE);
@@ -483,10 +503,59 @@ export function ensureTower(dimension, origin, facing, corner, tier, delaysTicks
 }
 
 /**
+ * The whole fortification build, as a job the engine can spread over ticks.
+ *
+ * This used to be one unbroken synchronous pass, and that was the real reason
+ * the corner towers kept coming out as bare posts or half a tower: a single
+ * tier costs 41,000-72,000 native block calls, and Bedrock's script watchdog
+ * TERMINATES the runtime when one tick hangs for more than 3000 ms. On a
+ * phone that threshold is reached partway through the build - and since the
+ * towers are the last thing raised, they are exactly what gets cut off. The
+ * wall (built earlier in the same tick) survives, which is precisely the
+ * "стена есть, башен нет" the bug reports show.
+ *
+ * As a job, no slice does more than a few hundred block calls, so the build
+ * always runs to the end no matter how slow the device.
+ */
+export function* fortificationJob(dimension, origin, facing, rect, tier, terrain) {
+  const spec = TIER_SPEC[tier];
+  // clearRing's height only needs to cover this tier's own wall + tower
+  // roofline (buildTower uses spec.height + 4), not a flat constant sized
+  // for the tallest possible tier.
+  yield* clearRingJob(dimension, origin, facing, rect, spec.height + (terrain.steep ? 14 : 8));
+
+  // A visible wall must rest on ground even at the edge of a gentle slope.
+  const foundationBlock = tier === TIER_PALISADE ? "minecraft:oak_log" : "minecraft:cobblestone";
+  let done = 0;
+  for (const pos of ringPositions(rect)) {
+    if (!isGateway(pos, rect)) {
+      supportWallFoundation(dimension, origin, facing, pos.f, pos.s, foundationBlock);
+    }
+    if (++done % SLICE === 0) yield;
+  }
+
+  if (tier === TIER_PALISADE) yield* palisadeJob(dimension, origin, facing, rect);
+  else if (tier === TIER_COBBLE) yield* cobbleWallJob(dimension, origin, facing, rect);
+  else yield* castleWallJob(dimension, origin, facing, rect);
+
+  for (const corner of corners(rect)) {
+    yield;
+    try {
+      ensureTower(dimension, origin, facing, corner, tier);
+    } catch (e) {
+      console.warn("[village] tower build failed: " + e);
+    }
+  }
+}
+
+/**
  * Builds (or upgrades to) a fortification tier: clears whatever ring was
  * there before, raises the new wall and puts four watchtowers on the
  * corners. Returns the tower guard positions so the caller can station
  * villagers on them.
+ *
+ * The blocks land over the following ticks (see fortificationJob); the
+ * returned geometry is pure arithmetic and is correct immediately.
  */
 export function buildFortifications(dimension, origin, facing, maxForward, tier, protectedRects) {
   const rect = perimeterFor(maxForward);
@@ -496,37 +565,84 @@ export function buildFortifications(dimension, origin, facing, maxForward, tier,
   // every plot already built on, so re-running this at a later tier can
   // never repaint an existing house's floor with grass again.
   const terrain = prepareFortifiedArea(dimension, origin, facing, rect, protectedRects);
-  // clearRing's height only needs to cover this tier's own wall + tower
-  // roofline (buildTower uses spec.height + 4), not a flat constant sized
-  // for the tallest possible tier - that flat 16/30 cleared 2-4x more
-  // vertical space than a tier-1 palisade (height 4) ever needs, adding
-  // pure waste on top of the interior sweep at exactly the level (L5) that
-  // triggered the watchdog hang.
-  const spec = TIER_SPEC[tier];
-  const clearRingHeight = spec.height + (terrain.steep ? 14 : 8);
-  clearRing(dimension, origin, facing, rect, clearRingHeight);
 
-  // A visible wall must rest on ground even at the edge of a gentle slope.
-  // On steep terrain the cleared village plane gives all supports the same
-  // height, avoiding a jagged "staircase" perimeter.
-  const foundationBlock = tier === TIER_PALISADE ? "minecraft:oak_log" : "minecraft:cobblestone";
-  for (const pos of ringPositions(rect)) {
-    if (!isGateway(pos, rect)) {
-      supportWallFoundation(dimension, origin, facing, pos.f, pos.s, foundationBlock);
-    }
+  // Keep the whole perimeter loaded for the duration of the job, then a
+  // while longer so the tower retries and the guard spawns still land.
+  const release = holdLoadedArea(dimension, origin, facing, rect);
+  const job = fortificationJob(dimension, origin, facing, rect, tier, terrain);
+  system.runJob(drainThenRelease(job, release));
+
+  return {
+    rect, tier, terrain,
+    towers: corners(rect).map((corner) => towerResult(origin, facing, towerGeometry(corner, tier)))
+  };
+}
+
+/** Runs a build job to the end, then releases the ticking area it needed. */
+function* drainThenRelease(job, release) {
+  try {
+    yield* job;
+  } finally {
+    release(400);
   }
+}
 
-  if (tier === TIER_PALISADE) buildPalisade(dimension, origin, facing, rect);
-  else if (tier === TIER_COBBLE) buildCobbleWall(dimension, origin, facing, rect);
-  else buildCastleWall(dimension, origin, facing, rect);
-
-  const towers = [];
+/**
+ * Rebuilds any corner tower that is not standing, for a village that already
+ * has a fortification tier.
+ *
+ * A build-time fix cannot help a village whose towers were already lost - the
+ * fortification build only ever runs on a level-up, and that level is behind
+ * the player forever. So the towers are also checked while the player is in
+ * the village and quietly rebuilt when one is missing, which repairs worlds
+ * broken by the older versions as well as any tower a future hiccup eats.
+ *
+ * Only corners whose chunks are actually loaded are touched: writing into an
+ * unloaded chunk fails silently, and "missing" is indistinguishable from
+ * "not loaded" from the outside, so an unloaded corner is left for a later
+ * pass rather than being pointlessly rebuilt into the void.
+ */
+export function repairTowers(dimension, origin, facing, maxForward, tier) {
+  const rect = perimeterFor(maxForward);
+  const broken = [];
   for (const corner of corners(rect)) {
+    const geom = towerGeometry(corner, tier);
+    const probe = toWorld(origin, facing, geom.midF, geom.midS, geom.roomUp);
+    if (!chunkIsLoaded(dimension, probe)) continue;
+    if (!towerIsComplete(dimension, origin, facing, geom, tier)) broken.push(corner);
+  }
+  if (broken.length === 0) return 0;
+  system.runJob(repairJob(dimension, origin, facing, broken, tier));
+  return broken.length;
+}
+
+function* repairJob(dimension, origin, facing, brokenCorners, tier) {
+  for (const corner of brokenCorners) {
+    yield;
     try {
-      towers.push(ensureTower(dimension, origin, facing, corner, tier));
+      buildTower(dimension, origin, facing, corner, tier);
     } catch (e) {
-      console.warn("[village] tower build failed: " + e);
+      console.warn("[village] tower repair failed: " + e);
     }
   }
-  return { rect, towers, tier, terrain };
+}
+
+/**
+ * dimension.isChunkLoaded is the engine's own answer to "will a write here
+ * land?" - far more reliable than inferring it from a thrown error, and it
+ * costs nothing. Older engines predate it, so fall back to probing.
+ */
+function chunkIsLoaded(dimension, location) {
+  if (typeof dimension.isChunkLoaded === "function") {
+    try {
+      return dimension.isChunkLoaded(location);
+    } catch (e) {
+      return false;
+    }
+  }
+  try {
+    return !!dimension.getBlock(location);
+  } catch (e) {
+    return false;
+  }
 }
