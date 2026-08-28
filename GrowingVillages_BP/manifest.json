@@ -1,0 +1,58 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Growing Villages [BETA]",
+    "description": "\u0420\u0430\u0441\u0442\u0443\u0449\u0438\u0435 \u0434\u0435\u0440\u0435\u0432\u043d\u0438 \u2014 \u0440\u0430\u0442\u0443\u0448\u0430, \u043a\u0432\u0435\u0441\u0442\u044b, \u0440\u0435\u043c\u0435\u0441\u043b\u0435\u043d\u043d\u0438\u043a\u0438, \u0443\u043a\u0440\u0435\u043f\u043b\u0435\u043d\u0438\u044f. \u0411\u0435\u0442\u0430 5: \u0433\u0430\u0440\u0430\u043d\u0442\u0438\u044f \u043f\u043e\u044f\u0432\u043b\u0435\u043d\u0438\u044f \u0431\u043b\u043e\u043a\u043e\u0432 (\u0434\u0432\u0435\u0440\u0438/\u0442\u0430\u0431\u043b\u0438\u0447\u043a\u0438), \u0433\u043e\u0440\u0448\u043a\u0438, \u0432\u0445\u043e\u0434 \u0432 \u0431\u0430\u0448\u043d\u0438, \u0437\u0430\u0431\u043e\u0440 \u0434\u0435\u0440\u0435\u0432\u043d\u0438 \u043d\u0430 \u0432\u0435\u0441\u044c \u0440\u0430\u0437\u043c\u0435\u0440, \u043a\u0430\u043b\u0438\u0442\u043a\u0430 \u0443 \u0433\u0440\u044f\u0434\u043a\u0438, \u043d\u043e\u0447\u043d\u0430\u044f \u043f\u0440\u0438\u0432\u044f\u0437\u043a\u0430 NPC.",
+    "uuid": "5928911d-8eff-4d1e-b5da-760701015e8b",
+    "version": [
+      0,
+      5,
+      4
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      80
+    ]
+  },
+  "modules": [
+    {
+      "type": "data",
+      "uuid": "e5325faa-dcf6-4478-ab02-671010d687d5",
+      "version": [
+        0,
+        5,
+        4
+      ]
+    },
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "a3c30c82-89be-4762-ad51-e532f6dd45f3",
+      "entry": "scripts/main.js",
+      "version": [
+        0,
+        5,
+        4
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "2.0.0"
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": "2.0.0"
+    },
+    {
+      "uuid": "d954e84b-467c-4fab-adca-07b5f2bbf223",
+      "version": [
+        0,
+        5,
+        4
+      ]
+    }
+  ]
+}

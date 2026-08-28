@@ -1,0 +1,1763 @@
+
+=== spatial plan exports and completeness ===
+ok: FINAL_RADIUS is the approved R94 allocation boundary
+ok: WALL_INNER_FACE is the approved inner curtain coordinate
+ok: TOWER_INNER_FACE is the approved inner tower coordinate
+ok: all canonical 1–20 building IDs are present exactly once (22)
+ok: canonical building IDs are unique
+ok: all separate L1 building IDs exist
+ok: L20 grand_council_hall exists
+ok: farmer retains a future quest reserve
+ok: blacksmith retains a future quest reserve
+ok: cartographer retains a future quest reserve
+ok: miner retains a future quest reserve
+ok: unknown building IDs return null
+ok: town_hall: has at least one allocation envelope
+ok: town_hall/core: bounds are valid integers
+ok: campfire: has at least one allocation envelope
+ok: campfire/core: bounds are valid integers
+ok: starter_house: has at least one allocation envelope
+ok: starter_house/core: bounds are valid integers
+ok: farmer_homestead: has at least one allocation envelope
+ok: farmer_homestead/core: bounds are valid integers
+ok: farmer_homestead/farmer_quest_annex: bounds are valid integers
+ok: blacksmith_forge: has at least one allocation envelope
+ok: blacksmith_forge/core: bounds are valid integers
+ok: blacksmith_forge/blacksmith_quest_yard: bounds are valid integers
+ok: cartographer_house: has at least one allocation envelope
+ok: cartographer_house/core: bounds are valid integers
+ok: cartographer_house/cartographer_quest_annex: bounds are valid integers
+ok: fortification_palisade: has at least one allocation envelope
+ok: fortification_palisade/core: bounds are valid integers
+ok: miner_house: has at least one allocation envelope
+ok: miner_house/core: bounds are valid integers
+ok: miner_house/miner_quest_yard: bounds are valid integers
+ok: resident_house: has at least one allocation envelope
+ok: resident_house/core: bounds are valid integers
+ok: fortification_cobble: has at least one allocation envelope
+ok: fortification_cobble/core: bounds are valid integers
+ok: artisan_house: has at least one allocation envelope
+ok: artisan_house/core: bounds are valid integers
+ok: fortification_castle: has at least one allocation envelope
+ok: fortification_castle/core: bounds are valid integers
+ok: market_square: has at least one allocation envelope
+ok: market_square/core: bounds are valid integers
+ok: granary_yard: has at least one allocation envelope
+ok: granary_yard/core: bounds are valid integers
+ok: travellers_inn: has at least one allocation envelope
+ok: travellers_inn/core: bounds are valid integers
+ok: guard_barracks: has at least one allocation envelope
+ok: guard_barracks/core: bounds are valid integers
+ok: village_archive: has at least one allocation envelope
+ok: village_archive/core: bounds are valid integers
+ok: ranger_lodge: has at least one allocation envelope
+ok: ranger_lodge/core: bounds are valid integers
+ok: mercy_infirmary: has at least one allocation envelope
+ok: mercy_infirmary/core: bounds are valid integers
+ok: engineer_workshop: has at least one allocation envelope
+ok: engineer_workshop/core: bounds are valid integers
+ok: commons_infrastructure: has at least one allocation envelope
+ok: commons_infrastructure/core: bounds are valid integers
+ok: grand_council_hall: has at least one allocation envelope
+ok: grand_council_hall/core: bounds are valid integers
+
+=== allocation overlap and road safety ===
+ok: town_hall/core does not overlap campfire/core
+ok: town_hall/core does not overlap starter_house/core
+ok: town_hall/core does not overlap farmer_homestead/core
+ok: town_hall/core does not overlap farmer_homestead/farmer_quest_annex
+ok: town_hall/core does not overlap blacksmith_forge/core
+ok: town_hall/core does not overlap blacksmith_forge/blacksmith_quest_yard
+ok: town_hall/core does not overlap cartographer_house/core
+ok: town_hall/core does not overlap cartographer_house/cartographer_quest_annex
+ok: town_hall/core does not overlap fortification_palisade/core
+ok: town_hall/core does not overlap miner_house/core
+ok: town_hall/core does not overlap miner_house/miner_quest_yard
+ok: town_hall/core does not overlap resident_house/core
+ok: town_hall/core does not overlap fortification_cobble/core
+ok: town_hall/core does not overlap artisan_house/core
+ok: town_hall/core does not overlap fortification_castle/core
+ok: town_hall/core does not overlap market_square/core
+ok: town_hall/core does not overlap granary_yard/core
+ok: town_hall/core does not overlap travellers_inn/core
+ok: town_hall/core does not overlap guard_barracks/core
+ok: town_hall/core does not overlap village_archive/core
+ok: town_hall/core does not overlap ranger_lodge/core
+ok: town_hall/core does not overlap mercy_infirmary/core
+ok: town_hall/core does not overlap engineer_workshop/core
+ok: town_hall/core does not overlap commons_infrastructure/core
+ok: town_hall/core does not overlap grand_council_hall/core
+ok: campfire/core does not overlap starter_house/core
+ok: campfire/core does not overlap farmer_homestead/core
+ok: campfire/core does not overlap farmer_homestead/farmer_quest_annex
+ok: campfire/core does not overlap blacksmith_forge/core
+ok: campfire/core does not overlap blacksmith_forge/blacksmith_quest_yard
+ok: campfire/core does not overlap cartographer_house/core
+ok: campfire/core does not overlap cartographer_house/cartographer_quest_annex
+ok: campfire/core does not overlap fortification_palisade/core
+ok: campfire/core does not overlap miner_house/core
+ok: campfire/core does not overlap miner_house/miner_quest_yard
+ok: campfire/core does not overlap resident_house/core
+ok: campfire/core does not overlap fortification_cobble/core
+ok: campfire/core does not overlap artisan_house/core
+ok: campfire/core does not overlap fortification_castle/core
+ok: campfire/core does not overlap market_square/core
+ok: campfire/core does not overlap granary_yard/core
+ok: campfire/core does not overlap travellers_inn/core
+ok: campfire/core does not overlap guard_barracks/core
+ok: campfire/core does not overlap village_archive/core
+ok: campfire/core does not overlap ranger_lodge/core
+ok: campfire/core does not overlap mercy_infirmary/core
+ok: campfire/core does not overlap engineer_workshop/core
+ok: campfire/core does not overlap commons_infrastructure/core
+ok: campfire/core does not overlap grand_council_hall/core
+ok: starter_house/core does not overlap farmer_homestead/core
+ok: starter_house/core does not overlap farmer_homestead/farmer_quest_annex
+ok: starter_house/core does not overlap blacksmith_forge/core
+ok: starter_house/core does not overlap blacksmith_forge/blacksmith_quest_yard
+ok: starter_house/core does not overlap cartographer_house/core
+ok: starter_house/core does not overlap cartographer_house/cartographer_quest_annex
+ok: starter_house/core does not overlap fortification_palisade/core
+ok: starter_house/core does not overlap miner_house/core
+ok: starter_house/core does not overlap miner_house/miner_quest_yard
+ok: starter_house/core does not overlap resident_house/core
+ok: starter_house/core does not overlap fortification_cobble/core
+ok: starter_house/core does not overlap artisan_house/core
+ok: starter_house/core does not overlap fortification_castle/core
+ok: starter_house/core does not overlap market_square/core
+ok: starter_house/core does not overlap granary_yard/core
+ok: starter_house/core does not overlap travellers_inn/core
+ok: starter_house/core does not overlap guard_barracks/core
+ok: starter_house/core does not overlap village_archive/core
+ok: starter_house/core does not overlap ranger_lodge/core
+ok: starter_house/core does not overlap mercy_infirmary/core
+ok: starter_house/core does not overlap engineer_workshop/core
+ok: starter_house/core does not overlap commons_infrastructure/core
+ok: starter_house/core does not overlap grand_council_hall/core
+ok: farmer_homestead/core does not overlap blacksmith_forge/core
+ok: farmer_homestead/core does not overlap blacksmith_forge/blacksmith_quest_yard
+ok: farmer_homestead/core does not overlap cartographer_house/core
+ok: farmer_homestead/core does not overlap cartographer_house/cartographer_quest_annex
+ok: farmer_homestead/core does not overlap fortification_palisade/core
+ok: farmer_homestead/core does not overlap miner_house/core
+ok: farmer_homestead/core does not overlap miner_house/miner_quest_yard
+ok: farmer_homestead/core does not overlap resident_house/core
+ok: farmer_homestead/core does not overlap fortification_cobble/core
+ok: farmer_homestead/core does not overlap artisan_house/core
+ok: farmer_homestead/core does not overlap fortification_castle/core
+ok: farmer_homestead/core does not overlap market_square/core
+ok: farmer_homestead/core does not overlap granary_yard/core
+ok: farmer_homestead/core does not overlap travellers_inn/core
+ok: farmer_homestead/core does not overlap guard_barracks/core
+ok: farmer_homestead/core does not overlap village_archive/core
+ok: farmer_homestead/core does not overlap ranger_lodge/core
+ok: farmer_homestead/core does not overlap mercy_infirmary/core
+ok: farmer_homestead/core does not overlap engineer_workshop/core
+ok: farmer_homestead/core does not overlap commons_infrastructure/core
+ok: farmer_homestead/core does not overlap grand_council_hall/core
+ok: farmer_homestead/farmer_quest_annex does not overlap blacksmith_forge/core
+ok: farmer_homestead/farmer_quest_annex does not overlap blacksmith_forge/blacksmith_quest_yard
+ok: farmer_homestead/farmer_quest_annex does not overlap cartographer_house/core
+ok: farmer_homestead/farmer_quest_annex does not overlap cartographer_house/cartographer_quest_annex
+ok: farmer_homestead/farmer_quest_annex does not overlap fortification_palisade/core
+ok: farmer_homestead/farmer_quest_annex does not overlap miner_house/core
+ok: farmer_homestead/farmer_quest_annex does not overlap miner_house/miner_quest_yard
+ok: farmer_homestead/farmer_quest_annex does not overlap resident_house/core
+ok: farmer_homestead/farmer_quest_annex does not overlap fortification_cobble/core
+ok: farmer_homestead/farmer_quest_annex does not overlap artisan_house/core
+ok: farmer_homestead/farmer_quest_annex does not overlap fortification_castle/core
+ok: farmer_homestead/farmer_quest_annex does not overlap market_square/core
+ok: farmer_homestead/farmer_quest_annex does not overlap granary_yard/core
+ok: farmer_homestead/farmer_quest_annex does not overlap travellers_inn/core
+ok: farmer_homestead/farmer_quest_annex does not overlap guard_barracks/core
+ok: farmer_homestead/farmer_quest_annex does not overlap village_archive/core
+ok: farmer_homestead/farmer_quest_annex does not overlap ranger_lodge/core
+ok: farmer_homestead/farmer_quest_annex does not overlap mercy_infirmary/core
+ok: farmer_homestead/farmer_quest_annex does not overlap engineer_workshop/core
+ok: farmer_homestead/farmer_quest_annex does not overlap commons_infrastructure/core
+ok: farmer_homestead/farmer_quest_annex does not overlap grand_council_hall/core
+ok: blacksmith_forge/core does not overlap cartographer_house/core
+ok: blacksmith_forge/core does not overlap cartographer_house/cartographer_quest_annex
+ok: blacksmith_forge/core does not overlap fortification_palisade/core
+ok: blacksmith_forge/core does not overlap miner_house/core
+ok: blacksmith_forge/core does not overlap miner_house/miner_quest_yard
+ok: blacksmith_forge/core does not overlap resident_house/core
+ok: blacksmith_forge/core does not overlap fortification_cobble/core
+ok: blacksmith_forge/core does not overlap artisan_house/core
+ok: blacksmith_forge/core does not overlap fortification_castle/core
+ok: blacksmith_forge/core does not overlap market_square/core
+ok: blacksmith_forge/core does not overlap granary_yard/core
+ok: blacksmith_forge/core does not overlap travellers_inn/core
+ok: blacksmith_forge/core does not overlap guard_barracks/core
+ok: blacksmith_forge/core does not overlap village_archive/core
+ok: blacksmith_forge/core does not overlap ranger_lodge/core
+ok: blacksmith_forge/core does not overlap mercy_infirmary/core
+ok: blacksmith_forge/core does not overlap engineer_workshop/core
+ok: blacksmith_forge/core does not overlap commons_infrastructure/core
+ok: blacksmith_forge/core does not overlap grand_council_hall/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap cartographer_house/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap cartographer_house/cartographer_quest_annex
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap fortification_palisade/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap miner_house/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap miner_house/miner_quest_yard
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap resident_house/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap fortification_cobble/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap artisan_house/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap fortification_castle/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap market_square/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap granary_yard/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap travellers_inn/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap guard_barracks/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap village_archive/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap ranger_lodge/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap mercy_infirmary/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap engineer_workshop/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap commons_infrastructure/core
+ok: blacksmith_forge/blacksmith_quest_yard does not overlap grand_council_hall/core
+ok: cartographer_house/core does not overlap fortification_palisade/core
+ok: cartographer_house/core does not overlap miner_house/core
+ok: cartographer_house/core does not overlap miner_house/miner_quest_yard
+ok: cartographer_house/core does not overlap resident_house/core
+ok: cartographer_house/core does not overlap fortification_cobble/core
+ok: cartographer_house/core does not overlap artisan_house/core
+ok: cartographer_house/core does not overlap fortification_castle/core
+ok: cartographer_house/core does not overlap market_square/core
+ok: cartographer_house/core does not overlap granary_yard/core
+ok: cartographer_house/core does not overlap travellers_inn/core
+ok: cartographer_house/core does not overlap guard_barracks/core
+ok: cartographer_house/core does not overlap village_archive/core
+ok: cartographer_house/core does not overlap ranger_lodge/core
+ok: cartographer_house/core does not overlap mercy_infirmary/core
+ok: cartographer_house/core does not overlap engineer_workshop/core
+ok: cartographer_house/core does not overlap commons_infrastructure/core
+ok: cartographer_house/core does not overlap grand_council_hall/core
+ok: cartographer_house/cartographer_quest_annex does not overlap fortification_palisade/core
+ok: cartographer_house/cartographer_quest_annex does not overlap miner_house/core
+ok: cartographer_house/cartographer_quest_annex does not overlap miner_house/miner_quest_yard
+ok: cartographer_house/cartographer_quest_annex does not overlap resident_house/core
+ok: cartographer_house/cartographer_quest_annex does not overlap fortification_cobble/core
+ok: cartographer_house/cartographer_quest_annex does not overlap artisan_house/core
+ok: cartographer_house/cartographer_quest_annex does not overlap fortification_castle/core
+ok: cartographer_house/cartographer_quest_annex does not overlap market_square/core
+ok: cartographer_house/cartographer_quest_annex does not overlap granary_yard/core
+ok: cartographer_house/cartographer_quest_annex does not overlap travellers_inn/core
+ok: cartographer_house/cartographer_quest_annex does not overlap guard_barracks/core
+ok: cartographer_house/cartographer_quest_annex does not overlap village_archive/core
+ok: cartographer_house/cartographer_quest_annex does not overlap ranger_lodge/core
+ok: cartographer_house/cartographer_quest_annex does not overlap mercy_infirmary/core
+ok: cartographer_house/cartographer_quest_annex does not overlap engineer_workshop/core
+ok: cartographer_house/cartographer_quest_annex does not overlap commons_infrastructure/core
+ok: cartographer_house/cartographer_quest_annex does not overlap grand_council_hall/core
+ok: fortification_palisade/core does not overlap miner_house/core
+ok: fortification_palisade/core does not overlap miner_house/miner_quest_yard
+ok: fortification_palisade/core does not overlap resident_house/core
+ok: fortification_palisade/core does not overlap fortification_cobble/core
+ok: fortification_palisade/core does not overlap artisan_house/core
+ok: fortification_palisade/core does not overlap fortification_castle/core
+ok: fortification_palisade/core does not overlap market_square/core
+ok: fortification_palisade/core does not overlap granary_yard/core
+ok: fortification_palisade/core does not overlap travellers_inn/core
+ok: fortification_palisade/core does not overlap guard_barracks/core
+ok: fortification_palisade/core does not overlap village_archive/core
+ok: fortification_palisade/core does not overlap ranger_lodge/core
+ok: fortification_palisade/core does not overlap mercy_infirmary/core
+ok: fortification_palisade/core does not overlap engineer_workshop/core
+ok: fortification_palisade/core does not overlap commons_infrastructure/core
+ok: fortification_palisade/core does not overlap grand_council_hall/core
+ok: miner_house/core does not overlap resident_house/core
+ok: miner_house/core does not overlap fortification_cobble/core
+ok: miner_house/core does not overlap artisan_house/core
+ok: miner_house/core does not overlap fortification_castle/core
+ok: miner_house/core does not overlap market_square/core
+ok: miner_house/core does not overlap granary_yard/core
+ok: miner_house/core does not overlap travellers_inn/core
+ok: miner_house/core does not overlap guard_barracks/core
+ok: miner_house/core does not overlap village_archive/core
+ok: miner_house/core does not overlap ranger_lodge/core
+ok: miner_house/core does not overlap mercy_infirmary/core
+ok: miner_house/core does not overlap engineer_workshop/core
+ok: miner_house/core does not overlap commons_infrastructure/core
+ok: miner_house/core does not overlap grand_council_hall/core
+ok: miner_house/miner_quest_yard does not overlap resident_house/core
+ok: miner_house/miner_quest_yard does not overlap fortification_cobble/core
+ok: miner_house/miner_quest_yard does not overlap artisan_house/core
+ok: miner_house/miner_quest_yard does not overlap fortification_castle/core
+ok: miner_house/miner_quest_yard does not overlap market_square/core
+ok: miner_house/miner_quest_yard does not overlap granary_yard/core
+ok: miner_house/miner_quest_yard does not overlap travellers_inn/core
+ok: miner_house/miner_quest_yard does not overlap guard_barracks/core
+ok: miner_house/miner_quest_yard does not overlap village_archive/core
+ok: miner_house/miner_quest_yard does not overlap ranger_lodge/core
+ok: miner_house/miner_quest_yard does not overlap mercy_infirmary/core
+ok: miner_house/miner_quest_yard does not overlap engineer_workshop/core
+ok: miner_house/miner_quest_yard does not overlap commons_infrastructure/core
+ok: miner_house/miner_quest_yard does not overlap grand_council_hall/core
+ok: resident_house/core does not overlap fortification_cobble/core
+ok: resident_house/core does not overlap artisan_house/core
+ok: resident_house/core does not overlap fortification_castle/core
+ok: resident_house/core does not overlap market_square/core
+ok: resident_house/core does not overlap granary_yard/core
+ok: resident_house/core does not overlap travellers_inn/core
+ok: resident_house/core does not overlap guard_barracks/core
+ok: resident_house/core does not overlap village_archive/core
+ok: resident_house/core does not overlap ranger_lodge/core
+ok: resident_house/core does not overlap mercy_infirmary/core
+ok: resident_house/core does not overlap engineer_workshop/core
+ok: resident_house/core does not overlap commons_infrastructure/core
+ok: resident_house/core does not overlap grand_council_hall/core
+ok: fortification_cobble/core does not overlap artisan_house/core
+ok: fortification_cobble/core does not overlap fortification_castle/core
+ok: fortification_cobble/core does not overlap market_square/core
+ok: fortification_cobble/core does not overlap granary_yard/core
+ok: fortification_cobble/core does not overlap travellers_inn/core
+ok: fortification_cobble/core does not overlap guard_barracks/core
+ok: fortification_cobble/core does not overlap village_archive/core
+ok: fortification_cobble/core does not overlap ranger_lodge/core
+ok: fortification_cobble/core does not overlap mercy_infirmary/core
+ok: fortification_cobble/core does not overlap engineer_workshop/core
+ok: fortification_cobble/core does not overlap commons_infrastructure/core
+ok: fortification_cobble/core does not overlap grand_council_hall/core
+ok: artisan_house/core does not overlap fortification_castle/core
+ok: artisan_house/core does not overlap market_square/core
+ok: artisan_house/core does not overlap granary_yard/core
+ok: artisan_house/core does not overlap travellers_inn/core
+ok: artisan_house/core does not overlap guard_barracks/core
+ok: artisan_house/core does not overlap village_archive/core
+ok: artisan_house/core does not overlap ranger_lodge/core
+ok: artisan_house/core does not overlap mercy_infirmary/core
+ok: artisan_house/core does not overlap engineer_workshop/core
+ok: artisan_house/core does not overlap commons_infrastructure/core
+ok: artisan_house/core does not overlap grand_council_hall/core
+ok: fortification_castle/core does not overlap market_square/core
+ok: fortification_castle/core does not overlap granary_yard/core
+ok: fortification_castle/core does not overlap travellers_inn/core
+ok: fortification_castle/core does not overlap guard_barracks/core
+ok: fortification_castle/core does not overlap village_archive/core
+ok: fortification_castle/core does not overlap ranger_lodge/core
+ok: fortification_castle/core does not overlap mercy_infirmary/core
+ok: fortification_castle/core does not overlap engineer_workshop/core
+ok: fortification_castle/core does not overlap commons_infrastructure/core
+ok: fortification_castle/core does not overlap grand_council_hall/core
+ok: market_square/core does not overlap granary_yard/core
+ok: market_square/core does not overlap travellers_inn/core
+ok: market_square/core does not overlap guard_barracks/core
+ok: market_square/core does not overlap village_archive/core
+ok: market_square/core does not overlap ranger_lodge/core
+ok: market_square/core does not overlap mercy_infirmary/core
+ok: market_square/core does not overlap engineer_workshop/core
+ok: market_square/core does not overlap commons_infrastructure/core
+ok: market_square/core does not overlap grand_council_hall/core
+ok: granary_yard/core does not overlap travellers_inn/core
+ok: granary_yard/core does not overlap guard_barracks/core
+ok: granary_yard/core does not overlap village_archive/core
+ok: granary_yard/core does not overlap ranger_lodge/core
+ok: granary_yard/core does not overlap mercy_infirmary/core
+ok: granary_yard/core does not overlap engineer_workshop/core
+ok: granary_yard/core does not overlap commons_infrastructure/core
+ok: granary_yard/core does not overlap grand_council_hall/core
+ok: travellers_inn/core does not overlap guard_barracks/core
+ok: travellers_inn/core does not overlap village_archive/core
+ok: travellers_inn/core does not overlap ranger_lodge/core
+ok: travellers_inn/core does not overlap mercy_infirmary/core
+ok: travellers_inn/core does not overlap engineer_workshop/core
+ok: travellers_inn/core does not overlap commons_infrastructure/core
+ok: travellers_inn/core does not overlap grand_council_hall/core
+ok: guard_barracks/core does not overlap village_archive/core
+ok: guard_barracks/core does not overlap ranger_lodge/core
+ok: guard_barracks/core does not overlap mercy_infirmary/core
+ok: guard_barracks/core does not overlap engineer_workshop/core
+ok: guard_barracks/core does not overlap commons_infrastructure/core
+ok: guard_barracks/core does not overlap grand_council_hall/core
+ok: village_archive/core does not overlap ranger_lodge/core
+ok: village_archive/core does not overlap mercy_infirmary/core
+ok: village_archive/core does not overlap engineer_workshop/core
+ok: village_archive/core does not overlap commons_infrastructure/core
+ok: village_archive/core does not overlap grand_council_hall/core
+ok: ranger_lodge/core does not overlap mercy_infirmary/core
+ok: ranger_lodge/core does not overlap engineer_workshop/core
+ok: ranger_lodge/core does not overlap commons_infrastructure/core
+ok: ranger_lodge/core does not overlap grand_council_hall/core
+ok: mercy_infirmary/core does not overlap engineer_workshop/core
+ok: mercy_infirmary/core does not overlap commons_infrastructure/core
+ok: mercy_infirmary/core does not overlap grand_council_hall/core
+ok: engineer_workshop/core does not overlap commons_infrastructure/core
+ok: engineer_workshop/core does not overlap grand_council_hall/core
+ok: commons_infrastructure/core does not overlap grand_council_hall/core
+ok: town_hall/core stays outside both 3-block road bands
+ok: campfire/core stays outside both 3-block road bands
+ok: starter_house/core stays outside both 3-block road bands
+ok: farmer_homestead/core stays outside both 3-block road bands
+ok: farmer_homestead/farmer_quest_annex stays outside both 3-block road bands
+ok: blacksmith_forge/core stays outside both 3-block road bands
+ok: blacksmith_forge/blacksmith_quest_yard stays outside both 3-block road bands
+ok: cartographer_house/core stays outside both 3-block road bands
+ok: cartographer_house/cartographer_quest_annex stays outside both 3-block road bands
+ok: fortification_palisade/core stays outside both 3-block road bands
+ok: miner_house/core stays outside both 3-block road bands
+ok: miner_house/miner_quest_yard stays outside both 3-block road bands
+ok: resident_house/core stays outside both 3-block road bands
+ok: fortification_cobble/core stays outside both 3-block road bands
+ok: artisan_house/core stays outside both 3-block road bands
+ok: fortification_castle/core stays outside both 3-block road bands
+ok: market_square/core stays outside both 3-block road bands
+ok: granary_yard/core stays outside both 3-block road bands
+ok: travellers_inn/core stays outside both 3-block road bands
+ok: guard_barracks/core stays outside both 3-block road bands
+ok: village_archive/core stays outside both 3-block road bands
+ok: ranger_lodge/core stays outside both 3-block road bands
+ok: mercy_infirmary/core stays outside both 3-block road bands
+ok: engineer_workshop/core stays outside both 3-block road bands
+ok: commons_infrastructure/core stays outside both 3-block road bands
+ok: grand_council_hall/core stays outside both 3-block road bands
+ok: crossroad cell union has the expected 1125 cells (1125)
+ok: forward road is continuous at -94,-1
+ok: forward road is continuous at -94,0
+ok: forward road is continuous at -94,1
+ok: forward road is continuous at -93,-1
+ok: forward road is continuous at -93,0
+ok: forward road is continuous at -93,1
+ok: forward road is continuous at -92,-1
+ok: forward road is continuous at -92,0
+ok: forward road is continuous at -92,1
+ok: forward road is continuous at -91,-1
+ok: forward road is continuous at -91,0
+ok: forward road is continuous at -91,1
+ok: forward road is continuous at -90,-1
+ok: forward road is continuous at -90,0
+ok: forward road is continuous at -90,1
+ok: forward road is continuous at -89,-1
+ok: forward road is continuous at -89,0
+ok: forward road is continuous at -89,1
+ok: forward road is continuous at -88,-1
+ok: forward road is continuous at -88,0
+ok: forward road is continuous at -88,1
+ok: forward road is continuous at -87,-1
+ok: forward road is continuous at -87,0
+ok: forward road is continuous at -87,1
+ok: forward road is continuous at -86,-1
+ok: forward road is continuous at -86,0
+ok: forward road is continuous at -86,1
+ok: forward road is continuous at -85,-1
+ok: forward road is continuous at -85,0
+ok: forward road is continuous at -85,1
+ok: forward road is continuous at -84,-1
+ok: forward road is continuous at -84,0
+ok: forward road is continuous at -84,1
+ok: forward road is continuous at -83,-1
+ok: forward road is continuous at -83,0
+ok: forward road is continuous at -83,1
+ok: forward road is continuous at -82,-1
+ok: forward road is continuous at -82,0
+ok: forward road is continuous at -82,1
+ok: forward road is continuous at -81,-1
+ok: forward road is continuous at -81,0
+ok: forward road is continuous at -81,1
+ok: forward road is continuous at -80,-1
+ok: forward road is continuous at -80,0
+ok: forward road is continuous at -80,1
+ok: forward road is continuous at -79,-1
+ok: forward road is continuous at -79,0
+ok: forward road is continuous at -79,1
+ok: forward road is continuous at -78,-1
+ok: forward road is continuous at -78,0
+ok: forward road is continuous at -78,1
+ok: forward road is continuous at -77,-1
+ok: forward road is continuous at -77,0
+ok: forward road is continuous at -77,1
+ok: forward road is continuous at -76,-1
+ok: forward road is continuous at -76,0
+ok: forward road is continuous at -76,1
+ok: forward road is continuous at -75,-1
+ok: forward road is continuous at -75,0
+ok: forward road is continuous at -75,1
+ok: forward road is continuous at -74,-1
+ok: forward road is continuous at -74,0
+ok: forward road is continuous at -74,1
+ok: forward road is continuous at -73,-1
+ok: forward road is continuous at -73,0
+ok: forward road is continuous at -73,1
+ok: forward road is continuous at -72,-1
+ok: forward road is continuous at -72,0
+ok: forward road is continuous at -72,1
+ok: forward road is continuous at -71,-1
+ok: forward road is continuous at -71,0
+ok: forward road is continuous at -71,1
+ok: forward road is continuous at -70,-1
+ok: forward road is continuous at -70,0
+ok: forward road is continuous at -70,1
+ok: forward road is continuous at -69,-1
+ok: forward road is continuous at -69,0
+ok: forward road is continuous at -69,1
+ok: forward road is continuous at -68,-1
+ok: forward road is continuous at -68,0
+ok: forward road is continuous at -68,1
+ok: forward road is continuous at -67,-1
+ok: forward road is continuous at -67,0
+ok: forward road is continuous at -67,1
+ok: forward road is continuous at -66,-1
+ok: forward road is continuous at -66,0
+ok: forward road is continuous at -66,1
+ok: forward road is continuous at -65,-1
+ok: forward road is continuous at -65,0
+ok: forward road is continuous at -65,1
+ok: forward road is continuous at -64,-1
+ok: forward road is continuous at -64,0
+ok: forward road is continuous at -64,1
+ok: forward road is continuous at -63,-1
+ok: forward road is continuous at -63,0
+ok: forward road is continuous at -63,1
+ok: forward road is continuous at -62,-1
+ok: forward road is continuous at -62,0
+ok: forward road is continuous at -62,1
+ok: forward road is continuous at -61,-1
+ok: forward road is continuous at -61,0
+ok: forward road is continuous at -61,1
+ok: forward road is continuous at -60,-1
+ok: forward road is continuous at -60,0
+ok: forward road is continuous at -60,1
+ok: forward road is continuous at -59,-1
+ok: forward road is continuous at -59,0
+ok: forward road is continuous at -59,1
+ok: forward road is continuous at -58,-1
+ok: forward road is continuous at -58,0
+ok: forward road is continuous at -58,1
+ok: forward road is continuous at -57,-1
+ok: forward road is continuous at -57,0
+ok: forward road is continuous at -57,1
+ok: forward road is continuous at -56,-1
+ok: forward road is continuous at -56,0
+ok: forward road is continuous at -56,1
+ok: forward road is continuous at -55,-1
+ok: forward road is continuous at -55,0
+ok: forward road is continuous at -55,1
+ok: forward road is continuous at -54,-1
+ok: forward road is continuous at -54,0
+ok: forward road is continuous at -54,1
+ok: forward road is continuous at -53,-1
+ok: forward road is continuous at -53,0
+ok: forward road is continuous at -53,1
+ok: forward road is continuous at -52,-1
+ok: forward road is continuous at -52,0
+ok: forward road is continuous at -52,1
+ok: forward road is continuous at -51,-1
+ok: forward road is continuous at -51,0
+ok: forward road is continuous at -51,1
+ok: forward road is continuous at -50,-1
+ok: forward road is continuous at -50,0
+ok: forward road is continuous at -50,1
+ok: forward road is continuous at -49,-1
+ok: forward road is continuous at -49,0
+ok: forward road is continuous at -49,1
+ok: forward road is continuous at -48,-1
+ok: forward road is continuous at -48,0
+ok: forward road is continuous at -48,1
+ok: forward road is continuous at -47,-1
+ok: forward road is continuous at -47,0
+ok: forward road is continuous at -47,1
+ok: forward road is continuous at -46,-1
+ok: forward road is continuous at -46,0
+ok: forward road is continuous at -46,1
+ok: forward road is continuous at -45,-1
+ok: forward road is continuous at -45,0
+ok: forward road is continuous at -45,1
+ok: forward road is continuous at -44,-1
+ok: forward road is continuous at -44,0
+ok: forward road is continuous at -44,1
+ok: forward road is continuous at -43,-1
+ok: forward road is continuous at -43,0
+ok: forward road is continuous at -43,1
+ok: forward road is continuous at -42,-1
+ok: forward road is continuous at -42,0
+ok: forward road is continuous at -42,1
+ok: forward road is continuous at -41,-1
+ok: forward road is continuous at -41,0
+ok: forward road is continuous at -41,1
+ok: forward road is continuous at -40,-1
+ok: forward road is continuous at -40,0
+ok: forward road is continuous at -40,1
+ok: forward road is continuous at -39,-1
+ok: forward road is continuous at -39,0
+ok: forward road is continuous at -39,1
+ok: forward road is continuous at -38,-1
+ok: forward road is continuous at -38,0
+ok: forward road is continuous at -38,1
+ok: forward road is continuous at -37,-1
+ok: forward road is continuous at -37,0
+ok: forward road is continuous at -37,1
+ok: forward road is continuous at -36,-1
+ok: forward road is continuous at -36,0
+ok: forward road is continuous at -36,1
+ok: forward road is continuous at -35,-1
+ok: forward road is continuous at -35,0
+ok: forward road is continuous at -35,1
+ok: forward road is continuous at -34,-1
+ok: forward road is continuous at -34,0
+ok: forward road is continuous at -34,1
+ok: forward road is continuous at -33,-1
+ok: forward road is continuous at -33,0
+ok: forward road is continuous at -33,1
+ok: forward road is continuous at -32,-1
+ok: forward road is continuous at -32,0
+ok: forward road is continuous at -32,1
+ok: forward road is continuous at -31,-1
+ok: forward road is continuous at -31,0
+ok: forward road is continuous at -31,1
+ok: forward road is continuous at -30,-1
+ok: forward road is continuous at -30,0
+ok: forward road is continuous at -30,1
+ok: forward road is continuous at -29,-1
+ok: forward road is continuous at -29,0
+ok: forward road is continuous at -29,1
+ok: forward road is continuous at -28,-1
+ok: forward road is continuous at -28,0
+ok: forward road is continuous at -28,1
+ok: forward road is continuous at -27,-1
+ok: forward road is continuous at -27,0
+ok: forward road is continuous at -27,1
+ok: forward road is continuous at -26,-1
+ok: forward road is continuous at -26,0
+ok: forward road is continuous at -26,1
+ok: forward road is continuous at -25,-1
+ok: forward road is continuous at -25,0
+ok: forward road is continuous at -25,1
+ok: forward road is continuous at -24,-1
+ok: forward road is continuous at -24,0
+ok: forward road is continuous at -24,1
+ok: forward road is continuous at -23,-1
+ok: forward road is continuous at -23,0
+ok: forward road is continuous at -23,1
+ok: forward road is continuous at -22,-1
+ok: forward road is continuous at -22,0
+ok: forward road is continuous at -22,1
+ok: forward road is continuous at -21,-1
+ok: forward road is continuous at -21,0
+ok: forward road is continuous at -21,1
+ok: forward road is continuous at -20,-1
+ok: forward road is continuous at -20,0
+ok: forward road is continuous at -20,1
+ok: forward road is continuous at -19,-1
+ok: forward road is continuous at -19,0
+ok: forward road is continuous at -19,1
+ok: forward road is continuous at -18,-1
+ok: forward road is continuous at -18,0
+ok: forward road is continuous at -18,1
+ok: forward road is continuous at -17,-1
+ok: forward road is continuous at -17,0
+ok: forward road is continuous at -17,1
+ok: forward road is continuous at -16,-1
+ok: forward road is continuous at -16,0
+ok: forward road is continuous at -16,1
+ok: forward road is continuous at -15,-1
+ok: forward road is continuous at -15,0
+ok: forward road is continuous at -15,1
+ok: forward road is continuous at -14,-1
+ok: forward road is continuous at -14,0
+ok: forward road is continuous at -14,1
+ok: forward road is continuous at -13,-1
+ok: forward road is continuous at -13,0
+ok: forward road is continuous at -13,1
+ok: forward road is continuous at -12,-1
+ok: forward road is continuous at -12,0
+ok: forward road is continuous at -12,1
+ok: forward road is continuous at -11,-1
+ok: forward road is continuous at -11,0
+ok: forward road is continuous at -11,1
+ok: forward road is continuous at -10,-1
+ok: forward road is continuous at -10,0
+ok: forward road is continuous at -10,1
+ok: forward road is continuous at -9,-1
+ok: forward road is continuous at -9,0
+ok: forward road is continuous at -9,1
+ok: forward road is continuous at -8,-1
+ok: forward road is continuous at -8,0
+ok: forward road is continuous at -8,1
+ok: forward road is continuous at -7,-1
+ok: forward road is continuous at -7,0
+ok: forward road is continuous at -7,1
+ok: forward road is continuous at -6,-1
+ok: forward road is continuous at -6,0
+ok: forward road is continuous at -6,1
+ok: forward road is continuous at -5,-1
+ok: forward road is continuous at -5,0
+ok: forward road is continuous at -5,1
+ok: forward road is continuous at -4,-1
+ok: forward road is continuous at -4,0
+ok: forward road is continuous at -4,1
+ok: forward road is continuous at -3,-1
+ok: forward road is continuous at -3,0
+ok: forward road is continuous at -3,1
+ok: forward road is continuous at -2,-1
+ok: forward road is continuous at -2,0
+ok: forward road is continuous at -2,1
+ok: forward road is continuous at -1,-1
+ok: forward road is continuous at -1,0
+ok: forward road is continuous at -1,1
+ok: forward road is continuous at 0,-1
+ok: forward road is continuous at 0,0
+ok: forward road is continuous at 0,1
+ok: forward road is continuous at 1,-1
+ok: forward road is continuous at 1,0
+ok: forward road is continuous at 1,1
+ok: forward road is continuous at 2,-1
+ok: forward road is continuous at 2,0
+ok: forward road is continuous at 2,1
+ok: forward road is continuous at 3,-1
+ok: forward road is continuous at 3,0
+ok: forward road is continuous at 3,1
+ok: forward road is continuous at 4,-1
+ok: forward road is continuous at 4,0
+ok: forward road is continuous at 4,1
+ok: forward road is continuous at 5,-1
+ok: forward road is continuous at 5,0
+ok: forward road is continuous at 5,1
+ok: forward road is continuous at 6,-1
+ok: forward road is continuous at 6,0
+ok: forward road is continuous at 6,1
+ok: forward road is continuous at 7,-1
+ok: forward road is continuous at 7,0
+ok: forward road is continuous at 7,1
+ok: forward road is continuous at 8,-1
+ok: forward road is continuous at 8,0
+ok: forward road is continuous at 8,1
+ok: forward road is continuous at 9,-1
+ok: forward road is continuous at 9,0
+ok: forward road is continuous at 9,1
+ok: forward road is continuous at 10,-1
+ok: forward road is continuous at 10,0
+ok: forward road is continuous at 10,1
+ok: forward road is continuous at 11,-1
+ok: forward road is continuous at 11,0
+ok: forward road is continuous at 11,1
+ok: forward road is continuous at 12,-1
+ok: forward road is continuous at 12,0
+ok: forward road is continuous at 12,1
+ok: forward road is continuous at 13,-1
+ok: forward road is continuous at 13,0
+ok: forward road is continuous at 13,1
+ok: forward road is continuous at 14,-1
+ok: forward road is continuous at 14,0
+ok: forward road is continuous at 14,1
+ok: forward road is continuous at 15,-1
+ok: forward road is continuous at 15,0
+ok: forward road is continuous at 15,1
+ok: forward road is continuous at 16,-1
+ok: forward road is continuous at 16,0
+ok: forward road is continuous at 16,1
+ok: forward road is continuous at 17,-1
+ok: forward road is continuous at 17,0
+ok: forward road is continuous at 17,1
+ok: forward road is continuous at 18,-1
+ok: forward road is continuous at 18,0
+ok: forward road is continuous at 18,1
+ok: forward road is continuous at 19,-1
+ok: forward road is continuous at 19,0
+ok: forward road is continuous at 19,1
+ok: forward road is continuous at 20,-1
+ok: forward road is continuous at 20,0
+ok: forward road is continuous at 20,1
+ok: forward road is continuous at 21,-1
+ok: forward road is continuous at 21,0
+ok: forward road is continuous at 21,1
+ok: forward road is continuous at 22,-1
+ok: forward road is continuous at 22,0
+ok: forward road is continuous at 22,1
+ok: forward road is continuous at 23,-1
+ok: forward road is continuous at 23,0
+ok: forward road is continuous at 23,1
+ok: forward road is continuous at 24,-1
+ok: forward road is continuous at 24,0
+ok: forward road is continuous at 24,1
+ok: forward road is continuous at 25,-1
+ok: forward road is continuous at 25,0
+ok: forward road is continuous at 25,1
+ok: forward road is continuous at 26,-1
+ok: forward road is continuous at 26,0
+ok: forward road is continuous at 26,1
+ok: forward road is continuous at 27,-1
+ok: forward road is continuous at 27,0
+ok: forward road is continuous at 27,1
+ok: forward road is continuous at 28,-1
+ok: forward road is continuous at 28,0
+ok: forward road is continuous at 28,1
+ok: forward road is continuous at 29,-1
+ok: forward road is continuous at 29,0
+ok: forward road is continuous at 29,1
+ok: forward road is continuous at 30,-1
+ok: forward road is continuous at 30,0
+ok: forward road is continuous at 30,1
+ok: forward road is continuous at 31,-1
+ok: forward road is continuous at 31,0
+ok: forward road is continuous at 31,1
+ok: forward road is continuous at 32,-1
+ok: forward road is continuous at 32,0
+ok: forward road is continuous at 32,1
+ok: forward road is continuous at 33,-1
+ok: forward road is continuous at 33,0
+ok: forward road is continuous at 33,1
+ok: forward road is continuous at 34,-1
+ok: forward road is continuous at 34,0
+ok: forward road is continuous at 34,1
+ok: forward road is continuous at 35,-1
+ok: forward road is continuous at 35,0
+ok: forward road is continuous at 35,1
+ok: forward road is continuous at 36,-1
+ok: forward road is continuous at 36,0
+ok: forward road is continuous at 36,1
+ok: forward road is continuous at 37,-1
+ok: forward road is continuous at 37,0
+ok: forward road is continuous at 37,1
+ok: forward road is continuous at 38,-1
+ok: forward road is continuous at 38,0
+ok: forward road is continuous at 38,1
+ok: forward road is continuous at 39,-1
+ok: forward road is continuous at 39,0
+ok: forward road is continuous at 39,1
+ok: forward road is continuous at 40,-1
+ok: forward road is continuous at 40,0
+ok: forward road is continuous at 40,1
+ok: forward road is continuous at 41,-1
+ok: forward road is continuous at 41,0
+ok: forward road is continuous at 41,1
+ok: forward road is continuous at 42,-1
+ok: forward road is continuous at 42,0
+ok: forward road is continuous at 42,1
+ok: forward road is continuous at 43,-1
+ok: forward road is continuous at 43,0
+ok: forward road is continuous at 43,1
+ok: forward road is continuous at 44,-1
+ok: forward road is continuous at 44,0
+ok: forward road is continuous at 44,1
+ok: forward road is continuous at 45,-1
+ok: forward road is continuous at 45,0
+ok: forward road is continuous at 45,1
+ok: forward road is continuous at 46,-1
+ok: forward road is continuous at 46,0
+ok: forward road is continuous at 46,1
+ok: forward road is continuous at 47,-1
+ok: forward road is continuous at 47,0
+ok: forward road is continuous at 47,1
+ok: forward road is continuous at 48,-1
+ok: forward road is continuous at 48,0
+ok: forward road is continuous at 48,1
+ok: forward road is continuous at 49,-1
+ok: forward road is continuous at 49,0
+ok: forward road is continuous at 49,1
+ok: forward road is continuous at 50,-1
+ok: forward road is continuous at 50,0
+ok: forward road is continuous at 50,1
+ok: forward road is continuous at 51,-1
+ok: forward road is continuous at 51,0
+ok: forward road is continuous at 51,1
+ok: forward road is continuous at 52,-1
+ok: forward road is continuous at 52,0
+ok: forward road is continuous at 52,1
+ok: forward road is continuous at 53,-1
+ok: forward road is continuous at 53,0
+ok: forward road is continuous at 53,1
+ok: forward road is continuous at 54,-1
+ok: forward road is continuous at 54,0
+ok: forward road is continuous at 54,1
+ok: forward road is continuous at 55,-1
+ok: forward road is continuous at 55,0
+ok: forward road is continuous at 55,1
+ok: forward road is continuous at 56,-1
+ok: forward road is continuous at 56,0
+ok: forward road is continuous at 56,1
+ok: forward road is continuous at 57,-1
+ok: forward road is continuous at 57,0
+ok: forward road is continuous at 57,1
+ok: forward road is continuous at 58,-1
+ok: forward road is continuous at 58,0
+ok: forward road is continuous at 58,1
+ok: forward road is continuous at 59,-1
+ok: forward road is continuous at 59,0
+ok: forward road is continuous at 59,1
+ok: forward road is continuous at 60,-1
+ok: forward road is continuous at 60,0
+ok: forward road is continuous at 60,1
+ok: forward road is continuous at 61,-1
+ok: forward road is continuous at 61,0
+ok: forward road is continuous at 61,1
+ok: forward road is continuous at 62,-1
+ok: forward road is continuous at 62,0
+ok: forward road is continuous at 62,1
+ok: forward road is continuous at 63,-1
+ok: forward road is continuous at 63,0
+ok: forward road is continuous at 63,1
+ok: forward road is continuous at 64,-1
+ok: forward road is continuous at 64,0
+ok: forward road is continuous at 64,1
+ok: forward road is continuous at 65,-1
+ok: forward road is continuous at 65,0
+ok: forward road is continuous at 65,1
+ok: forward road is continuous at 66,-1
+ok: forward road is continuous at 66,0
+ok: forward road is continuous at 66,1
+ok: forward road is continuous at 67,-1
+ok: forward road is continuous at 67,0
+ok: forward road is continuous at 67,1
+ok: forward road is continuous at 68,-1
+ok: forward road is continuous at 68,0
+ok: forward road is continuous at 68,1
+ok: forward road is continuous at 69,-1
+ok: forward road is continuous at 69,0
+ok: forward road is continuous at 69,1
+ok: forward road is continuous at 70,-1
+ok: forward road is continuous at 70,0
+ok: forward road is continuous at 70,1
+ok: forward road is continuous at 71,-1
+ok: forward road is continuous at 71,0
+ok: forward road is continuous at 71,1
+ok: forward road is continuous at 72,-1
+ok: forward road is continuous at 72,0
+ok: forward road is continuous at 72,1
+ok: forward road is continuous at 73,-1
+ok: forward road is continuous at 73,0
+ok: forward road is continuous at 73,1
+ok: forward road is continuous at 74,-1
+ok: forward road is continuous at 74,0
+ok: forward road is continuous at 74,1
+ok: forward road is continuous at 75,-1
+ok: forward road is continuous at 75,0
+ok: forward road is continuous at 75,1
+ok: forward road is continuous at 76,-1
+ok: forward road is continuous at 76,0
+ok: forward road is continuous at 76,1
+ok: forward road is continuous at 77,-1
+ok: forward road is continuous at 77,0
+ok: forward road is continuous at 77,1
+ok: forward road is continuous at 78,-1
+ok: forward road is continuous at 78,0
+ok: forward road is continuous at 78,1
+ok: forward road is continuous at 79,-1
+ok: forward road is continuous at 79,0
+ok: forward road is continuous at 79,1
+ok: forward road is continuous at 80,-1
+ok: forward road is continuous at 80,0
+ok: forward road is continuous at 80,1
+ok: forward road is continuous at 81,-1
+ok: forward road is continuous at 81,0
+ok: forward road is continuous at 81,1
+ok: forward road is continuous at 82,-1
+ok: forward road is continuous at 82,0
+ok: forward road is continuous at 82,1
+ok: forward road is continuous at 83,-1
+ok: forward road is continuous at 83,0
+ok: forward road is continuous at 83,1
+ok: forward road is continuous at 84,-1
+ok: forward road is continuous at 84,0
+ok: forward road is continuous at 84,1
+ok: forward road is continuous at 85,-1
+ok: forward road is continuous at 85,0
+ok: forward road is continuous at 85,1
+ok: forward road is continuous at 86,-1
+ok: forward road is continuous at 86,0
+ok: forward road is continuous at 86,1
+ok: forward road is continuous at 87,-1
+ok: forward road is continuous at 87,0
+ok: forward road is continuous at 87,1
+ok: forward road is continuous at 88,-1
+ok: forward road is continuous at 88,0
+ok: forward road is continuous at 88,1
+ok: forward road is continuous at 89,-1
+ok: forward road is continuous at 89,0
+ok: forward road is continuous at 89,1
+ok: forward road is continuous at 90,-1
+ok: forward road is continuous at 90,0
+ok: forward road is continuous at 90,1
+ok: forward road is continuous at 91,-1
+ok: forward road is continuous at 91,0
+ok: forward road is continuous at 91,1
+ok: forward road is continuous at 92,-1
+ok: forward road is continuous at 92,0
+ok: forward road is continuous at 92,1
+ok: forward road is continuous at 93,-1
+ok: forward road is continuous at 93,0
+ok: forward road is continuous at 93,1
+ok: forward road is continuous at 94,-1
+ok: forward road is continuous at 94,0
+ok: forward road is continuous at 94,1
+ok: side road is continuous at -1,-94
+ok: side road is continuous at 0,-94
+ok: side road is continuous at 1,-94
+ok: side road is continuous at -1,-93
+ok: side road is continuous at 0,-93
+ok: side road is continuous at 1,-93
+ok: side road is continuous at -1,-92
+ok: side road is continuous at 0,-92
+ok: side road is continuous at 1,-92
+ok: side road is continuous at -1,-91
+ok: side road is continuous at 0,-91
+ok: side road is continuous at 1,-91
+ok: side road is continuous at -1,-90
+ok: side road is continuous at 0,-90
+ok: side road is continuous at 1,-90
+ok: side road is continuous at -1,-89
+ok: side road is continuous at 0,-89
+ok: side road is continuous at 1,-89
+ok: side road is continuous at -1,-88
+ok: side road is continuous at 0,-88
+ok: side road is continuous at 1,-88
+ok: side road is continuous at -1,-87
+ok: side road is continuous at 0,-87
+ok: side road is continuous at 1,-87
+ok: side road is continuous at -1,-86
+ok: side road is continuous at 0,-86
+ok: side road is continuous at 1,-86
+ok: side road is continuous at -1,-85
+ok: side road is continuous at 0,-85
+ok: side road is continuous at 1,-85
+ok: side road is continuous at -1,-84
+ok: side road is continuous at 0,-84
+ok: side road is continuous at 1,-84
+ok: side road is continuous at -1,-83
+ok: side road is continuous at 0,-83
+ok: side road is continuous at 1,-83
+ok: side road is continuous at -1,-82
+ok: side road is continuous at 0,-82
+ok: side road is continuous at 1,-82
+ok: side road is continuous at -1,-81
+ok: side road is continuous at 0,-81
+ok: side road is continuous at 1,-81
+ok: side road is continuous at -1,-80
+ok: side road is continuous at 0,-80
+ok: side road is continuous at 1,-80
+ok: side road is continuous at -1,-79
+ok: side road is continuous at 0,-79
+ok: side road is continuous at 1,-79
+ok: side road is continuous at -1,-78
+ok: side road is continuous at 0,-78
+ok: side road is continuous at 1,-78
+ok: side road is continuous at -1,-77
+ok: side road is continuous at 0,-77
+ok: side road is continuous at 1,-77
+ok: side road is continuous at -1,-76
+ok: side road is continuous at 0,-76
+ok: side road is continuous at 1,-76
+ok: side road is continuous at -1,-75
+ok: side road is continuous at 0,-75
+ok: side road is continuous at 1,-75
+ok: side road is continuous at -1,-74
+ok: side road is continuous at 0,-74
+ok: side road is continuous at 1,-74
+ok: side road is continuous at -1,-73
+ok: side road is continuous at 0,-73
+ok: side road is continuous at 1,-73
+ok: side road is continuous at -1,-72
+ok: side road is continuous at 0,-72
+ok: side road is continuous at 1,-72
+ok: side road is continuous at -1,-71
+ok: side road is continuous at 0,-71
+ok: side road is continuous at 1,-71
+ok: side road is continuous at -1,-70
+ok: side road is continuous at 0,-70
+ok: side road is continuous at 1,-70
+ok: side road is continuous at -1,-69
+ok: side road is continuous at 0,-69
+ok: side road is continuous at 1,-69
+ok: side road is continuous at -1,-68
+ok: side road is continuous at 0,-68
+ok: side road is continuous at 1,-68
+ok: side road is continuous at -1,-67
+ok: side road is continuous at 0,-67
+ok: side road is continuous at 1,-67
+ok: side road is continuous at -1,-66
+ok: side road is continuous at 0,-66
+ok: side road is continuous at 1,-66
+ok: side road is continuous at -1,-65
+ok: side road is continuous at 0,-65
+ok: side road is continuous at 1,-65
+ok: side road is continuous at -1,-64
+ok: side road is continuous at 0,-64
+ok: side road is continuous at 1,-64
+ok: side road is continuous at -1,-63
+ok: side road is continuous at 0,-63
+ok: side road is continuous at 1,-63
+ok: side road is continuous at -1,-62
+ok: side road is continuous at 0,-62
+ok: side road is continuous at 1,-62
+ok: side road is continuous at -1,-61
+ok: side road is continuous at 0,-61
+ok: side road is continuous at 1,-61
+ok: side road is continuous at -1,-60
+ok: side road is continuous at 0,-60
+ok: side road is continuous at 1,-60
+ok: side road is continuous at -1,-59
+ok: side road is continuous at 0,-59
+ok: side road is continuous at 1,-59
+ok: side road is continuous at -1,-58
+ok: side road is continuous at 0,-58
+ok: side road is continuous at 1,-58
+ok: side road is continuous at -1,-57
+ok: side road is continuous at 0,-57
+ok: side road is continuous at 1,-57
+ok: side road is continuous at -1,-56
+ok: side road is continuous at 0,-56
+ok: side road is continuous at 1,-56
+ok: side road is continuous at -1,-55
+ok: side road is continuous at 0,-55
+ok: side road is continuous at 1,-55
+ok: side road is continuous at -1,-54
+ok: side road is continuous at 0,-54
+ok: side road is continuous at 1,-54
+ok: side road is continuous at -1,-53
+ok: side road is continuous at 0,-53
+ok: side road is continuous at 1,-53
+ok: side road is continuous at -1,-52
+ok: side road is continuous at 0,-52
+ok: side road is continuous at 1,-52
+ok: side road is continuous at -1,-51
+ok: side road is continuous at 0,-51
+ok: side road is continuous at 1,-51
+ok: side road is continuous at -1,-50
+ok: side road is continuous at 0,-50
+ok: side road is continuous at 1,-50
+ok: side road is continuous at -1,-49
+ok: side road is continuous at 0,-49
+ok: side road is continuous at 1,-49
+ok: side road is continuous at -1,-48
+ok: side road is continuous at 0,-48
+ok: side road is continuous at 1,-48
+ok: side road is continuous at -1,-47
+ok: side road is continuous at 0,-47
+ok: side road is continuous at 1,-47
+ok: side road is continuous at -1,-46
+ok: side road is continuous at 0,-46
+ok: side road is continuous at 1,-46
+ok: side road is continuous at -1,-45
+ok: side road is continuous at 0,-45
+ok: side road is continuous at 1,-45
+ok: side road is continuous at -1,-44
+ok: side road is continuous at 0,-44
+ok: side road is continuous at 1,-44
+ok: side road is continuous at -1,-43
+ok: side road is continuous at 0,-43
+ok: side road is continuous at 1,-43
+ok: side road is continuous at -1,-42
+ok: side road is continuous at 0,-42
+ok: side road is continuous at 1,-42
+ok: side road is continuous at -1,-41
+ok: side road is continuous at 0,-41
+ok: side road is continuous at 1,-41
+ok: side road is continuous at -1,-40
+ok: side road is continuous at 0,-40
+ok: side road is continuous at 1,-40
+ok: side road is continuous at -1,-39
+ok: side road is continuous at 0,-39
+ok: side road is continuous at 1,-39
+ok: side road is continuous at -1,-38
+ok: side road is continuous at 0,-38
+ok: side road is continuous at 1,-38
+ok: side road is continuous at -1,-37
+ok: side road is continuous at 0,-37
+ok: side road is continuous at 1,-37
+ok: side road is continuous at -1,-36
+ok: side road is continuous at 0,-36
+ok: side road is continuous at 1,-36
+ok: side road is continuous at -1,-35
+ok: side road is continuous at 0,-35
+ok: side road is continuous at 1,-35
+ok: side road is continuous at -1,-34
+ok: side road is continuous at 0,-34
+ok: side road is continuous at 1,-34
+ok: side road is continuous at -1,-33
+ok: side road is continuous at 0,-33
+ok: side road is continuous at 1,-33
+ok: side road is continuous at -1,-32
+ok: side road is continuous at 0,-32
+ok: side road is continuous at 1,-32
+ok: side road is continuous at -1,-31
+ok: side road is continuous at 0,-31
+ok: side road is continuous at 1,-31
+ok: side road is continuous at -1,-30
+ok: side road is continuous at 0,-30
+ok: side road is continuous at 1,-30
+ok: side road is continuous at -1,-29
+ok: side road is continuous at 0,-29
+ok: side road is continuous at 1,-29
+ok: side road is continuous at -1,-28
+ok: side road is continuous at 0,-28
+ok: side road is continuous at 1,-28
+ok: side road is continuous at -1,-27
+ok: side road is continuous at 0,-27
+ok: side road is continuous at 1,-27
+ok: side road is continuous at -1,-26
+ok: side road is continuous at 0,-26
+ok: side road is continuous at 1,-26
+ok: side road is continuous at -1,-25
+ok: side road is continuous at 0,-25
+ok: side road is continuous at 1,-25
+ok: side road is continuous at -1,-24
+ok: side road is continuous at 0,-24
+ok: side road is continuous at 1,-24
+ok: side road is continuous at -1,-23
+ok: side road is continuous at 0,-23
+ok: side road is continuous at 1,-23
+ok: side road is continuous at -1,-22
+ok: side road is continuous at 0,-22
+ok: side road is continuous at 1,-22
+ok: side road is continuous at -1,-21
+ok: side road is continuous at 0,-21
+ok: side road is continuous at 1,-21
+ok: side road is continuous at -1,-20
+ok: side road is continuous at 0,-20
+ok: side road is continuous at 1,-20
+ok: side road is continuous at -1,-19
+ok: side road is continuous at 0,-19
+ok: side road is continuous at 1,-19
+ok: side road is continuous at -1,-18
+ok: side road is continuous at 0,-18
+ok: side road is continuous at 1,-18
+ok: side road is continuous at -1,-17
+ok: side road is continuous at 0,-17
+ok: side road is continuous at 1,-17
+ok: side road is continuous at -1,-16
+ok: side road is continuous at 0,-16
+ok: side road is continuous at 1,-16
+ok: side road is continuous at -1,-15
+ok: side road is continuous at 0,-15
+ok: side road is continuous at 1,-15
+ok: side road is continuous at -1,-14
+ok: side road is continuous at 0,-14
+ok: side road is continuous at 1,-14
+ok: side road is continuous at -1,-13
+ok: side road is continuous at 0,-13
+ok: side road is continuous at 1,-13
+ok: side road is continuous at -1,-12
+ok: side road is continuous at 0,-12
+ok: side road is continuous at 1,-12
+ok: side road is continuous at -1,-11
+ok: side road is continuous at 0,-11
+ok: side road is continuous at 1,-11
+ok: side road is continuous at -1,-10
+ok: side road is continuous at 0,-10
+ok: side road is continuous at 1,-10
+ok: side road is continuous at -1,-9
+ok: side road is continuous at 0,-9
+ok: side road is continuous at 1,-9
+ok: side road is continuous at -1,-8
+ok: side road is continuous at 0,-8
+ok: side road is continuous at 1,-8
+ok: side road is continuous at -1,-7
+ok: side road is continuous at 0,-7
+ok: side road is continuous at 1,-7
+ok: side road is continuous at -1,-6
+ok: side road is continuous at 0,-6
+ok: side road is continuous at 1,-6
+ok: side road is continuous at -1,-5
+ok: side road is continuous at 0,-5
+ok: side road is continuous at 1,-5
+ok: side road is continuous at -1,-4
+ok: side road is continuous at 0,-4
+ok: side road is continuous at 1,-4
+ok: side road is continuous at -1,-3
+ok: side road is continuous at 0,-3
+ok: side road is continuous at 1,-3
+ok: side road is continuous at -1,-2
+ok: side road is continuous at 0,-2
+ok: side road is continuous at 1,-2
+ok: side road is continuous at -1,-1
+ok: side road is continuous at 0,-1
+ok: side road is continuous at 1,-1
+ok: side road is continuous at -1,0
+ok: side road is continuous at 0,0
+ok: side road is continuous at 1,0
+ok: side road is continuous at -1,1
+ok: side road is continuous at 0,1
+ok: side road is continuous at 1,1
+ok: side road is continuous at -1,2
+ok: side road is continuous at 0,2
+ok: side road is continuous at 1,2
+ok: side road is continuous at -1,3
+ok: side road is continuous at 0,3
+ok: side road is continuous at 1,3
+ok: side road is continuous at -1,4
+ok: side road is continuous at 0,4
+ok: side road is continuous at 1,4
+ok: side road is continuous at -1,5
+ok: side road is continuous at 0,5
+ok: side road is continuous at 1,5
+ok: side road is continuous at -1,6
+ok: side road is continuous at 0,6
+ok: side road is continuous at 1,6
+ok: side road is continuous at -1,7
+ok: side road is continuous at 0,7
+ok: side road is continuous at 1,7
+ok: side road is continuous at -1,8
+ok: side road is continuous at 0,8
+ok: side road is continuous at 1,8
+ok: side road is continuous at -1,9
+ok: side road is continuous at 0,9
+ok: side road is continuous at 1,9
+ok: side road is continuous at -1,10
+ok: side road is continuous at 0,10
+ok: side road is continuous at 1,10
+ok: side road is continuous at -1,11
+ok: side road is continuous at 0,11
+ok: side road is continuous at 1,11
+ok: side road is continuous at -1,12
+ok: side road is continuous at 0,12
+ok: side road is continuous at 1,12
+ok: side road is continuous at -1,13
+ok: side road is continuous at 0,13
+ok: side road is continuous at 1,13
+ok: side road is continuous at -1,14
+ok: side road is continuous at 0,14
+ok: side road is continuous at 1,14
+ok: side road is continuous at -1,15
+ok: side road is continuous at 0,15
+ok: side road is continuous at 1,15
+ok: side road is continuous at -1,16
+ok: side road is continuous at 0,16
+ok: side road is continuous at 1,16
+ok: side road is continuous at -1,17
+ok: side road is continuous at 0,17
+ok: side road is continuous at 1,17
+ok: side road is continuous at -1,18
+ok: side road is continuous at 0,18
+ok: side road is continuous at 1,18
+ok: side road is continuous at -1,19
+ok: side road is continuous at 0,19
+ok: side road is continuous at 1,19
+ok: side road is continuous at -1,20
+ok: side road is continuous at 0,20
+ok: side road is continuous at 1,20
+ok: side road is continuous at -1,21
+ok: side road is continuous at 0,21
+ok: side road is continuous at 1,21
+ok: side road is continuous at -1,22
+ok: side road is continuous at 0,22
+ok: side road is continuous at 1,22
+ok: side road is continuous at -1,23
+ok: side road is continuous at 0,23
+ok: side road is continuous at 1,23
+ok: side road is continuous at -1,24
+ok: side road is continuous at 0,24
+ok: side road is continuous at 1,24
+ok: side road is continuous at -1,25
+ok: side road is continuous at 0,25
+ok: side road is continuous at 1,25
+ok: side road is continuous at -1,26
+ok: side road is continuous at 0,26
+ok: side road is continuous at 1,26
+ok: side road is continuous at -1,27
+ok: side road is continuous at 0,27
+ok: side road is continuous at 1,27
+ok: side road is continuous at -1,28
+ok: side road is continuous at 0,28
+ok: side road is continuous at 1,28
+ok: side road is continuous at -1,29
+ok: side road is continuous at 0,29
+ok: side road is continuous at 1,29
+ok: side road is continuous at -1,30
+ok: side road is continuous at 0,30
+ok: side road is continuous at 1,30
+ok: side road is continuous at -1,31
+ok: side road is continuous at 0,31
+ok: side road is continuous at 1,31
+ok: side road is continuous at -1,32
+ok: side road is continuous at 0,32
+ok: side road is continuous at 1,32
+ok: side road is continuous at -1,33
+ok: side road is continuous at 0,33
+ok: side road is continuous at 1,33
+ok: side road is continuous at -1,34
+ok: side road is continuous at 0,34
+ok: side road is continuous at 1,34
+ok: side road is continuous at -1,35
+ok: side road is continuous at 0,35
+ok: side road is continuous at 1,35
+ok: side road is continuous at -1,36
+ok: side road is continuous at 0,36
+ok: side road is continuous at 1,36
+ok: side road is continuous at -1,37
+ok: side road is continuous at 0,37
+ok: side road is continuous at 1,37
+ok: side road is continuous at -1,38
+ok: side road is continuous at 0,38
+ok: side road is continuous at 1,38
+ok: side road is continuous at -1,39
+ok: side road is continuous at 0,39
+ok: side road is continuous at 1,39
+ok: side road is continuous at -1,40
+ok: side road is continuous at 0,40
+ok: side road is continuous at 1,40
+ok: side road is continuous at -1,41
+ok: side road is continuous at 0,41
+ok: side road is continuous at 1,41
+ok: side road is continuous at -1,42
+ok: side road is continuous at 0,42
+ok: side road is continuous at 1,42
+ok: side road is continuous at -1,43
+ok: side road is continuous at 0,43
+ok: side road is continuous at 1,43
+ok: side road is continuous at -1,44
+ok: side road is continuous at 0,44
+ok: side road is continuous at 1,44
+ok: side road is continuous at -1,45
+ok: side road is continuous at 0,45
+ok: side road is continuous at 1,45
+ok: side road is continuous at -1,46
+ok: side road is continuous at 0,46
+ok: side road is continuous at 1,46
+ok: side road is continuous at -1,47
+ok: side road is continuous at 0,47
+ok: side road is continuous at 1,47
+ok: side road is continuous at -1,48
+ok: side road is continuous at 0,48
+ok: side road is continuous at 1,48
+ok: side road is continuous at -1,49
+ok: side road is continuous at 0,49
+ok: side road is continuous at 1,49
+ok: side road is continuous at -1,50
+ok: side road is continuous at 0,50
+ok: side road is continuous at 1,50
+ok: side road is continuous at -1,51
+ok: side road is continuous at 0,51
+ok: side road is continuous at 1,51
+ok: side road is continuous at -1,52
+ok: side road is continuous at 0,52
+ok: side road is continuous at 1,52
+ok: side road is continuous at -1,53
+ok: side road is continuous at 0,53
+ok: side road is continuous at 1,53
+ok: side road is continuous at -1,54
+ok: side road is continuous at 0,54
+ok: side road is continuous at 1,54
+ok: side road is continuous at -1,55
+ok: side road is continuous at 0,55
+ok: side road is continuous at 1,55
+ok: side road is continuous at -1,56
+ok: side road is continuous at 0,56
+ok: side road is continuous at 1,56
+ok: side road is continuous at -1,57
+ok: side road is continuous at 0,57
+ok: side road is continuous at 1,57
+ok: side road is continuous at -1,58
+ok: side road is continuous at 0,58
+ok: side road is continuous at 1,58
+ok: side road is continuous at -1,59
+ok: side road is continuous at 0,59
+ok: side road is continuous at 1,59
+ok: side road is continuous at -1,60
+ok: side road is continuous at 0,60
+ok: side road is continuous at 1,60
+ok: side road is continuous at -1,61
+ok: side road is continuous at 0,61
+ok: side road is continuous at 1,61
+ok: side road is continuous at -1,62
+ok: side road is continuous at 0,62
+ok: side road is continuous at 1,62
+ok: side road is continuous at -1,63
+ok: side road is continuous at 0,63
+ok: side road is continuous at 1,63
+ok: side road is continuous at -1,64
+ok: side road is continuous at 0,64
+ok: side road is continuous at 1,64
+ok: side road is continuous at -1,65
+ok: side road is continuous at 0,65
+ok: side road is continuous at 1,65
+ok: side road is continuous at -1,66
+ok: side road is continuous at 0,66
+ok: side road is continuous at 1,66
+ok: side road is continuous at -1,67
+ok: side road is continuous at 0,67
+ok: side road is continuous at 1,67
+ok: side road is continuous at -1,68
+ok: side road is continuous at 0,68
+ok: side road is continuous at 1,68
+ok: side road is continuous at -1,69
+ok: side road is continuous at 0,69
+ok: side road is continuous at 1,69
+ok: side road is continuous at -1,70
+ok: side road is continuous at 0,70
+ok: side road is continuous at 1,70
+ok: side road is continuous at -1,71
+ok: side road is continuous at 0,71
+ok: side road is continuous at 1,71
+ok: side road is continuous at -1,72
+ok: side road is continuous at 0,72
+ok: side road is continuous at 1,72
+ok: side road is continuous at -1,73
+ok: side road is continuous at 0,73
+ok: side road is continuous at 1,73
+ok: side road is continuous at -1,74
+ok: side road is continuous at 0,74
+ok: side road is continuous at 1,74
+ok: side road is continuous at -1,75
+ok: side road is continuous at 0,75
+ok: side road is continuous at 1,75
+ok: side road is continuous at -1,76
+ok: side road is continuous at 0,76
+ok: side road is continuous at 1,76
+ok: side road is continuous at -1,77
+ok: side road is continuous at 0,77
+ok: side road is continuous at 1,77
+ok: side road is continuous at -1,78
+ok: side road is continuous at 0,78
+ok: side road is continuous at 1,78
+ok: side road is continuous at -1,79
+ok: side road is continuous at 0,79
+ok: side road is continuous at 1,79
+ok: side road is continuous at -1,80
+ok: side road is continuous at 0,80
+ok: side road is continuous at 1,80
+ok: side road is continuous at -1,81
+ok: side road is continuous at 0,81
+ok: side road is continuous at 1,81
+ok: side road is continuous at -1,82
+ok: side road is continuous at 0,82
+ok: side road is continuous at 1,82
+ok: side road is continuous at -1,83
+ok: side road is continuous at 0,83
+ok: side road is continuous at 1,83
+ok: side road is continuous at -1,84
+ok: side road is continuous at 0,84
+ok: side road is continuous at 1,84
+ok: side road is continuous at -1,85
+ok: side road is continuous at 0,85
+ok: side road is continuous at 1,85
+ok: side road is continuous at -1,86
+ok: side road is continuous at 0,86
+ok: side road is continuous at 1,86
+ok: side road is continuous at -1,87
+ok: side road is continuous at 0,87
+ok: side road is continuous at 1,87
+ok: side road is continuous at -1,88
+ok: side road is continuous at 0,88
+ok: side road is continuous at 1,88
+ok: side road is continuous at -1,89
+ok: side road is continuous at 0,89
+ok: side road is continuous at 1,89
+ok: side road is continuous at -1,90
+ok: side road is continuous at 0,90
+ok: side road is continuous at 1,90
+ok: side road is continuous at -1,91
+ok: side road is continuous at 0,91
+ok: side road is continuous at 1,91
+ok: side road is continuous at -1,92
+ok: side road is continuous at 0,92
+ok: side road is continuous at 1,92
+ok: side road is continuous at -1,93
+ok: side road is continuous at 0,93
+ok: side road is continuous at 1,93
+ok: side road is continuous at -1,94
+ok: side road is continuous at 0,94
+ok: side road is continuous at 1,94
+ok: both canonical road arms are three blocks wide
+
+=== gate specification ===
+ok: exactly four gate specs exist
+ok: one gate is assigned to each perimeter side
+ok: east_gate: is exactly five blocks wide
+ok: east_gate: lies on its correct R94 wall side
+ok: east_gate: opening contains the aligned three-block road axis
+ok: west_gate: is exactly five blocks wide
+ok: west_gate: lies on its correct R94 wall side
+ok: west_gate: opening contains the aligned three-block road axis
+ok: south_gate: is exactly five blocks wide
+ok: south_gate: lies on its correct R94 wall side
+ok: south_gate: opening contains the aligned three-block road axis
+ok: north_gate: is exactly five blocks wide
+ok: north_gate: lies on its correct R94 wall side
+ok: north_gate: opening contains the aligned three-block road axis
+
+=== wall schedule and clearance ===
+ok: schedule is exactly L5/R44, L8/R62, L10/R78, L15/R94
+ok: no wall schedule applies before L5
+ok: L5 selects palisade
+ok: L9 retains cobble stage
+ok: L10 selects the castle stage at R78
+ok: L15 expands the existing castle material to R94
+ok: L20 retains the final castle expansion stage
+ok: perimeterForRadius returns an R94 square
+ok: town_hall/core: wall clearance is at least 20 (81)
+ok: town_hall/core: exact tower clearance is at least 20 (78)
+ok: campfire/core: wall clearance is at least 20 (84)
+ok: campfire/core: exact tower clearance is at least 20 (82)
+ok: starter_house/core: wall clearance is at least 20 (83)
+ok: starter_house/core: exact tower clearance is at least 20 (80)
+ok: farmer_homestead/core: wall clearance is at least 20 (72)
+ok: farmer_homestead/core: exact tower clearance is at least 20 (70)
+ok: farmer_homestead/farmer_quest_annex: wall clearance is at least 20 (51)
+ok: farmer_homestead/farmer_quest_annex: exact tower clearance is at least 20 (54)
+ok: blacksmith_forge/core: wall clearance is at least 20 (72)
+ok: blacksmith_forge/core: exact tower clearance is at least 20 (74)
+ok: blacksmith_forge/blacksmith_quest_yard: wall clearance is at least 20 (27)
+ok: blacksmith_forge/blacksmith_quest_yard: exact tower clearance is at least 20 (50)
+ok: cartographer_house/core: wall clearance is at least 20 (77)
+ok: cartographer_house/core: exact tower clearance is at least 20 (75)
+ok: cartographer_house/cartographer_quest_annex: wall clearance is at least 20 (51)
+ok: cartographer_house/cartographer_quest_annex: exact tower clearance is at least 20 (50)
+ok: fortification_palisade/core: wall clearance is at least 20 (61)
+ok: fortification_palisade/core: exact tower clearance is at least 20 (74)
+ok: miner_house/core: wall clearance is at least 20 (65)
+ok: miner_house/core: exact tower clearance is at least 20 (70)
+ok: miner_house/miner_quest_yard: wall clearance is at least 20 (51)
+ok: miner_house/miner_quest_yard: exact tower clearance is at least 20 (48)
+ok: resident_house/core: wall clearance is at least 20 (65)
+ok: resident_house/core: exact tower clearance is at least 20 (74)
+ok: fortification_cobble/core: wall clearance is at least 20 (61)
+ok: fortification_cobble/core: exact tower clearance is at least 20 (74)
+ok: artisan_house/core: wall clearance is at least 20 (59)
+ok: artisan_house/core: exact tower clearance is at least 20 (74)
+ok: fortification_castle/core: wall clearance is at least 20 (49)
+ok: fortification_castle/core: exact tower clearance is at least 20 (74)
+ok: market_square/core: wall clearance is at least 20 (51)
+ok: market_square/core: exact tower clearance is at least 20 (70)
+ok: granary_yard/core: wall clearance is at least 20 (27)
+ok: granary_yard/core: exact tower clearance is at least 20 (54)
+ok: travellers_inn/core: wall clearance is at least 20 (27)
+ok: travellers_inn/core: exact tower clearance is at least 20 (48)
+ok: guard_barracks/core: wall clearance is at least 20 (27)
+ok: guard_barracks/core: exact tower clearance is at least 20 (50)
+ok: village_archive/core: wall clearance is at least 20 (31)
+ok: village_archive/core: exact tower clearance is at least 20 (72)
+ok: ranger_lodge/core: wall clearance is at least 20 (27)
+ok: ranger_lodge/core: exact tower clearance is at least 20 (24)
+ok: mercy_infirmary/core: wall clearance is at least 20 (27)
+ok: mercy_infirmary/core: exact tower clearance is at least 20 (24)
+ok: engineer_workshop/core: wall clearance is at least 20 (27)
+ok: engineer_workshop/core: exact tower clearance is at least 20 (24)
+ok: commons_infrastructure/core: wall clearance is at least 20 (27)
+ok: commons_infrastructure/core: exact tower clearance is at least 20 (24)
+ok: grand_council_hall/core: wall clearance is at least 20 (51)
+ok: grand_council_hall/core: exact tower clearance is at least 20 (54)
+ok: minimum curtain-wall clearance is the accepted 27 (27)
+ok: minimum exact tower clearance is the accepted 24 (24)
+
+=== legacy safety and module purity ===
+ok: market_square/core avoids legacy_town_hall
+ok: granary_yard/core avoids legacy_town_hall
+ok: travellers_inn/core avoids legacy_town_hall
+ok: guard_barracks/core avoids legacy_town_hall
+ok: village_archive/core avoids legacy_town_hall
+ok: ranger_lodge/core avoids legacy_town_hall
+ok: mercy_infirmary/core avoids legacy_town_hall
+ok: engineer_workshop/core avoids legacy_town_hall
+ok: commons_infrastructure/core avoids legacy_town_hall
+ok: grand_council_hall/core avoids legacy_town_hall
+ok: market_square/core avoids legacy_campfire
+ok: granary_yard/core avoids legacy_campfire
+ok: travellers_inn/core avoids legacy_campfire
+ok: guard_barracks/core avoids legacy_campfire
+ok: village_archive/core avoids legacy_campfire
+ok: ranger_lodge/core avoids legacy_campfire
+ok: mercy_infirmary/core avoids legacy_campfire
+ok: engineer_workshop/core avoids legacy_campfire
+ok: commons_infrastructure/core avoids legacy_campfire
+ok: grand_council_hall/core avoids legacy_campfire
+ok: market_square/core avoids legacy_starter_house
+ok: granary_yard/core avoids legacy_starter_house
+ok: travellers_inn/core avoids legacy_starter_house
+ok: guard_barracks/core avoids legacy_starter_house
+ok: village_archive/core avoids legacy_starter_house
+ok: ranger_lodge/core avoids legacy_starter_house
+ok: mercy_infirmary/core avoids legacy_starter_house
+ok: engineer_workshop/core avoids legacy_starter_house
+ok: commons_infrastructure/core avoids legacy_starter_house
+ok: grand_council_hall/core avoids legacy_starter_house
+ok: market_square/core avoids legacy_farmer
+ok: granary_yard/core avoids legacy_farmer
+ok: travellers_inn/core avoids legacy_farmer
+ok: guard_barracks/core avoids legacy_farmer
+ok: village_archive/core avoids legacy_farmer
+ok: ranger_lodge/core avoids legacy_farmer
+ok: mercy_infirmary/core avoids legacy_farmer
+ok: engineer_workshop/core avoids legacy_farmer
+ok: commons_infrastructure/core avoids legacy_farmer
+ok: grand_council_hall/core avoids legacy_farmer
+ok: market_square/core avoids legacy_blacksmith
+ok: granary_yard/core avoids legacy_blacksmith
+ok: travellers_inn/core avoids legacy_blacksmith
+ok: guard_barracks/core avoids legacy_blacksmith
+ok: village_archive/core avoids legacy_blacksmith
+ok: ranger_lodge/core avoids legacy_blacksmith
+ok: mercy_infirmary/core avoids legacy_blacksmith
+ok: engineer_workshop/core avoids legacy_blacksmith
+ok: commons_infrastructure/core avoids legacy_blacksmith
+ok: grand_council_hall/core avoids legacy_blacksmith
+ok: market_square/core avoids legacy_cartographer
+ok: granary_yard/core avoids legacy_cartographer
+ok: travellers_inn/core avoids legacy_cartographer
+ok: guard_barracks/core avoids legacy_cartographer
+ok: village_archive/core avoids legacy_cartographer
+ok: ranger_lodge/core avoids legacy_cartographer
+ok: mercy_infirmary/core avoids legacy_cartographer
+ok: engineer_workshop/core avoids legacy_cartographer
+ok: commons_infrastructure/core avoids legacy_cartographer
+ok: grand_council_hall/core avoids legacy_cartographer
+ok: market_square/core avoids legacy_palisade_house
+ok: granary_yard/core avoids legacy_palisade_house
+ok: travellers_inn/core avoids legacy_palisade_house
+ok: guard_barracks/core avoids legacy_palisade_house
+ok: village_archive/core avoids legacy_palisade_house
+ok: ranger_lodge/core avoids legacy_palisade_house
+ok: mercy_infirmary/core avoids legacy_palisade_house
+ok: engineer_workshop/core avoids legacy_palisade_house
+ok: commons_infrastructure/core avoids legacy_palisade_house
+ok: grand_council_hall/core avoids legacy_palisade_house
+ok: market_square/core avoids legacy_miner
+ok: granary_yard/core avoids legacy_miner
+ok: travellers_inn/core avoids legacy_miner
+ok: guard_barracks/core avoids legacy_miner
+ok: village_archive/core avoids legacy_miner
+ok: ranger_lodge/core avoids legacy_miner
+ok: mercy_infirmary/core avoids legacy_miner
+ok: engineer_workshop/core avoids legacy_miner
+ok: commons_infrastructure/core avoids legacy_miner
+ok: grand_council_hall/core avoids legacy_miner
+ok: market_square/core avoids legacy_resident
+ok: granary_yard/core avoids legacy_resident
+ok: travellers_inn/core avoids legacy_resident
+ok: guard_barracks/core avoids legacy_resident
+ok: village_archive/core avoids legacy_resident
+ok: ranger_lodge/core avoids legacy_resident
+ok: mercy_infirmary/core avoids legacy_resident
+ok: engineer_workshop/core avoids legacy_resident
+ok: commons_infrastructure/core avoids legacy_resident
+ok: grand_council_hall/core avoids legacy_resident
+ok: market_square/core avoids legacy_cobble_house
+ok: granary_yard/core avoids legacy_cobble_house
+ok: travellers_inn/core avoids legacy_cobble_house
+ok: guard_barracks/core avoids legacy_cobble_house
+ok: village_archive/core avoids legacy_cobble_house
+ok: ranger_lodge/core avoids legacy_cobble_house
+ok: mercy_infirmary/core avoids legacy_cobble_house
+ok: engineer_workshop/core avoids legacy_cobble_house
+ok: commons_infrastructure/core avoids legacy_cobble_house
+ok: grand_council_hall/core avoids legacy_cobble_house
+ok: market_square/core avoids legacy_artisan
+ok: granary_yard/core avoids legacy_artisan
+ok: travellers_inn/core avoids legacy_artisan
+ok: guard_barracks/core avoids legacy_artisan
+ok: village_archive/core avoids legacy_artisan
+ok: ranger_lodge/core avoids legacy_artisan
+ok: mercy_infirmary/core avoids legacy_artisan
+ok: engineer_workshop/core avoids legacy_artisan
+ok: commons_infrastructure/core avoids legacy_artisan
+ok: grand_council_hall/core avoids legacy_artisan
+ok: market_square/core avoids legacy_castle_house
+ok: granary_yard/core avoids legacy_castle_house
+ok: travellers_inn/core avoids legacy_castle_house
+ok: guard_barracks/core avoids legacy_castle_house
+ok: village_archive/core avoids legacy_castle_house
+ok: ranger_lodge/core avoids legacy_castle_house
+ok: mercy_infirmary/core avoids legacy_castle_house
+ok: engineer_workshop/core avoids legacy_castle_house
+ok: commons_infrastructure/core avoids legacy_castle_house
+ok: grand_council_hall/core avoids legacy_castle_house
+ok: market_square/core avoids legacy_special_strip
+ok: granary_yard/core avoids legacy_special_strip
+ok: travellers_inn/core avoids legacy_special_strip
+ok: guard_barracks/core avoids legacy_special_strip
+ok: village_archive/core avoids legacy_special_strip
+ok: ranger_lodge/core avoids legacy_special_strip
+ok: mercy_infirmary/core avoids legacy_special_strip
+ok: engineer_workshop/core avoids legacy_special_strip
+ok: commons_infrastructure/core avoids legacy_special_strip
+ok: grand_council_hall/core avoids legacy_special_strip
+ok: spatial_plan.js does not import @minecraft/server
+ok: spatial_plan.js has no world access at module load or runtime
+
+ALL SPATIAL PLAN TESTS PASSED (1751 checks)
