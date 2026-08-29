@@ -6,7 +6,9 @@
 улицы, приходят ремесленники с квестами, на поздних уровнях появляются
 стены, башни и стража.
 
-Текущая версия исходников: **0.5.8** (Bedrock 1.21.80+).
+Текущая версия — см. `header.version` в `GrowingVillages_BP/manifest.json`
+(любое число, зафиксированное тут, устареет). Целевой движок — Bedrock
+1.21.80+.
 
 ## Структура
 
@@ -22,12 +24,15 @@
 
 ### Тесты
 
+`tests/` — эмулятор Bedrock Script API на Node.js. Перед запуском любого
+теста синхронизируй код (`tests/scripts` — рабочая копия, в git не
+хранится, см. `.gitignore`):
+
 ```bash
-cd tests
-cp -r ../GrowingVillages_BP/scripts ./scripts   # синхронизировать код
-for f in lint run integration geometry roof fixes features polish; do
-  echo "=== $f ==="; node "$f.mjs"
-done
+rm -rf tests/scripts && cp -r GrowingVillages_BP/scripts tests/scripts
+node tests/имя_файла.mjs
 ```
 
-`tests/scripts` — синхронизируемая копия, в git не хранится (см. `.gitignore`).
+На каждую задачу пиши новый узкий тест под конкретную правку, а не
+перезапускай весь исторический `tests/*.mjs` по умолчанию — подробности
+и когда всё же стоит прогнать всё целиком — в [`HANDOVER.md`](HANDOVER.md).
