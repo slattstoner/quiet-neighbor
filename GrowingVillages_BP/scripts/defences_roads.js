@@ -35,7 +35,11 @@ const TIER_STYLE = Object.freeze({
     foundation: "minecraft:cobblestone",
     cap: "minecraft:cobblestone_wall",
     tower: "minecraft:cobblestone",
-    towerTop: "minecraft:stone_slab",
+    // Bedrock flattened the old "stone_slab" id away; smooth_stone_slab is
+    // the modern block that id used to render as. The castle tier below
+    // already uses a real slab id (stone_brick_slab) - this tier did not, so
+    // cobble-tier towers were left open-topped.
+    towerTop: "minecraft:smooth_stone_slab",
     gate: "minecraft:stone_bricks",
     accent: "minecraft:spruce_log",
     height: 6,
@@ -255,7 +259,7 @@ function buildRoadCells(placer, cells) {
 }
 
 /** Builds a bounded, 3-wide local road segment. No lamp posts are added inside the roadway. */
-export function buildRoadArm(dimension, origin, facing, axis, from, to) {
+function buildRoadArm(dimension, origin, facing, axis, from, to) {
   if (axis !== "forward" && axis !== "side") throw new Error(`unsupported road axis: ${axis}`);
   if (!Number.isInteger(from) || !Number.isInteger(to)) throw new Error("road endpoints must be integers");
   const min = Math.min(from, to), max = Math.max(from, to);
@@ -438,12 +442,3 @@ export function buildDefenceStage(dimension, origin, facing, stageOrLevel) {
   });
 }
 
-export function defenceBoundsIntersects(bounds, stageOrLevel) {
-  const stage = stageFor(stageOrLevel);
-  const rect = perimeterForRadius(stage.radius);
-  const outer = {
-    fMin: rect.fMin, fMax: rect.fMax,
-    sMin: rect.sMin, sMax: rect.sMax
-  };
-  return boundsOverlap(bounds, outer);
-}

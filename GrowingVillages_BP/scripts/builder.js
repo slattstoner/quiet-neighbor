@@ -182,7 +182,7 @@ function gabledRoof(placer, f1, f2, s1, s2, wallTopUp, roofStairsBlock, gableBlo
  * numbers independently and drifting out of sync with it (that drift is
  * exactly what let a farmer quest upgrade overlap the house itself).
  */
-export function plotSideBounds(side, depth = 7) {
+function plotSideBounds(side, depth = 7) {
   const plotCenter = Math.abs(side) <= 1 ? (side >= 0 ? 6 : -6) : side;
   const half = Math.floor(depth / 2);
   const near = plotCenter >= 0 ? plotCenter - half : plotCenter + half;
@@ -366,9 +366,18 @@ export function paletteMats(mats, paletteId) {
   };
 }
 
-export function paletteDoor(defaultDoor, paletteId) {
+/**
+ * Bedrock has spruce_door, birch_door, acacia_door... but the OAK door is
+ * "wooden_door", not "oak_door" - the one wood that breaks the pattern. The
+ * meadow palette is oak, so `minecraft:${p.wood}_door` produced a
+ * non-existent id there and those houses were built with no door at all.
+ */
+const DOOR_BY_WOOD = { oak: "minecraft:wooden_door" };
+
+function paletteDoor(defaultDoor, paletteId) {
   const p = paletteById(paletteId);
-  return p.id === "plains" ? "minecraft:wooden_door" : `minecraft:${p.wood}_door`;
+  if (p.id === "plains") return "minecraft:wooden_door";
+  return DOOR_BY_WOOD[p.wood] || `minecraft:${p.wood}_door`;
 }
 
 const PLAIN_MATS = {

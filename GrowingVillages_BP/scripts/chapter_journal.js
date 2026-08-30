@@ -1,6 +1,7 @@
 import { getVillageChapterState, RUNTIME_CHAPTER_MAX_LEVEL } from "./chapter_state.js";
 import { availableArcIdsForLevel, chapterForLevel } from "./quest_contract_v2.js";
 import { MAX_BETA_LEVEL } from "./levels.js";
+import { PROP_LEVEL } from "./village_state.js";
 
 export const JOURNAL_KEYS = Object.freeze({
   button: "growing_villages.ui.elder.chronicle.button",
@@ -64,7 +65,7 @@ function safeModel(locale, errorKey, details = {}) {
 function readLegacyLevel(elder) {
   if (!elder || typeof elder.getDynamicProperty !== "function") return null;
   try {
-    const level = elder.getDynamicProperty("village:level");
+    const level = elder.getDynamicProperty(PROP_LEVEL);
     return Number.isInteger(level) ? level : null;
   } catch (error) {
     return null;

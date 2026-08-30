@@ -24,9 +24,17 @@
 
 ### Тесты
 
-`tests/` — эмулятор Bedrock Script API на Node.js. Перед запуском любого
-теста синхронизируй код (`tests/scripts` — рабочая копия, в git не
-хранится, см. `.gitignore`):
+`tests/` — эмулятор Bedrock Script API на Node.js. `tests/run-all.mjs` сам
+синхронизирует `tests/scripts` из `GrowingVillages_BP/scripts` (эта копия —
+рабочая, в git не хранится, см. `.gitignore`) и прогоняет все наборы:
+
+```bash
+node tests/run-all.mjs              # весь набор
+node tests/run-all.mjs lint spatial # только наборы с этими словами в имени
+```
+
+Отдельный тест можно запустить и напрямую, но тогда синхронизируй код сам —
+иначе тест проверит старую копию:
 
 ```bash
 rm -rf tests/scripts && cp -r GrowingVillages_BP/scripts tests/scripts

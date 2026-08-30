@@ -2,23 +2,17 @@ import { setBlock, setBlockMulti, toWorld } from "./util.js";
 import { prepareSite } from "./terrain.js";
 import { paletteMats, farmerPatchOuterEdge } from "./builder.js";
 import { writeSign } from "./signboard.js";
+import { readFacing, readOrigin, readPaletteId } from "./village_state.js";
 
 const PLUS_SIDE_COMPASS = ["south", "north", "east", "west"];
 const MINUS_SIDE_COMPASS = ["north", "south", "west", "east"];
 
 function elderState(elder) {
-  return {
-    origin: {
-      x: elder.getDynamicProperty("village:originX"),
-      y: elder.getDynamicProperty("village:originY"),
-      z: elder.getDynamicProperty("village:originZ")
-    },
-    facing: elder.getDynamicProperty("village:facing")
-  };
+  return { origin: readOrigin(elder), facing: readFacing(elder) };
 }
 
 function paletteOf(elder) {
-  return elder.getDynamicProperty("village:palette") || "plains";
+  return readPaletteId(elder);
 }
 
 function localBlock(dimension, origin, facing, f, s, up, typeId, states) {
@@ -511,6 +505,3 @@ export function applyCraftsmanUpgrade(npc, elder, upgrade) {
   }
 }
 
-export function workerUpgradeTier(worker) {
-  return worker?.getDynamicProperty("village:upgradeTier") || 0;
-}

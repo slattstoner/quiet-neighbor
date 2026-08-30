@@ -97,7 +97,7 @@ export function* clearRingJob(dimension, origin, facing, rect, maxHeight) {
 }
 
 /** Synchronous clearRing, kept for callers that are not driving a job. */
-export function clearRing(dimension, origin, facing, rect, maxHeight) {
+function clearRing(dimension, origin, facing, rect, maxHeight) {
   for (const _ of clearRingJob(dimension, origin, facing, rect, maxHeight)) { /* drain */ }
 }
 

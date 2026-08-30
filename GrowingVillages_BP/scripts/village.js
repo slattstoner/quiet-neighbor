@@ -9,17 +9,14 @@ import { paletteAt, paletteById } from "./palettes.js";
 import { spawnCraftsman, spawnResident, spawnGateGolem, spawnTowerGuard, setHome } from "./npc.js";
 import { ensureVillageChapterState, setVillageChapterForLevel } from "./chapter_state.js";
 import { buildCityConnector } from "./city_connectors.js";
+import {
+  DEFAULT_PALETTE_ID,
+  PROP_CHEST_X, PROP_CHEST_Y, PROP_CHEST_Z,
+  PROP_FACING, PROP_ID, PROP_LAYOUT_VERSION, PROP_LEVEL,
+  PROP_ORIGIN_X, PROP_ORIGIN_Y, PROP_ORIGIN_Z,
+  PROP_PALETTE, PROP_TIER
+} from "./village_state.js";
 
-const PROP_LEVEL = "village:level";
-const PROP_ORIGIN_X = "village:originX";
-const PROP_ORIGIN_Y = "village:originY";
-const PROP_ORIGIN_Z = "village:originZ";
-const PROP_FACING = "village:facing";
-const PROP_CHEST_X = "village:chestX";
-const PROP_CHEST_Y = "village:chestY";
-const PROP_CHEST_Z = "village:chestZ";
-const PROP_ID = "village:id";
-const PROP_LAYOUT_VERSION = "village:layoutVersion";
 const CITY_BUILD_PREFIX = "village:v2:build:";
 
 export const LAYOUT_VERSION_V2 = 2;
@@ -82,10 +79,6 @@ function isCityLayoutAllowed(elder, nextLevel) {
 /** Level at which the gate and its iron golem guards appear. */
 export const GATE_LEVEL = 4;
 
-export function isElder(entity) {
-  return entity?.typeId === "minecraft:villager_v2" && entity.hasTag("village_elder");
-}
-
 /**
  * Founds a level-1 village. The site is levelled first so the buildings
  * sit on flat ground instead of floating over dips or sinking into
@@ -144,7 +137,7 @@ export function foundVillage(player, rawOrigin, facing, requestedPaletteId) {
   const villageName = generateVillageName();
   elder.setDynamicProperty(PROP_ID, id);
   elder.setDynamicProperty("village:name", villageName);
-  elder.setDynamicProperty("village:palette", palette.id);
+  elder.setDynamicProperty(PROP_PALETTE, palette.id);
   elder.setDynamicProperty(PROP_LEVEL, 1);
   elder.setDynamicProperty(PROP_ORIGIN_X, origin.x);
   elder.setDynamicProperty(PROP_ORIGIN_Y, origin.y);
@@ -222,7 +215,7 @@ export function refreshSign(elder) {
   return updateGateSign(elder.dimension, state.origin, state.facing, rect.fMax, {
     name: elder.getDynamicProperty("village:name") || "Деревня",
     level: state.level,
-    tier: elder.getDynamicProperty("village:tier") || 0,
+    tier: elder.getDynamicProperty(PROP_TIER) || 0,
     maxLevel: maxLevelForLayoutVersion(state.layoutVersion)
   });
 }
@@ -237,7 +230,7 @@ export function getVillageState(elder) {
       z: elder.getDynamicProperty(PROP_ORIGIN_Z)
     },
     facing: elder.getDynamicProperty(PROP_FACING),
-    palette: elder.getDynamicProperty("village:palette") || "plains",
+    palette: elder.getDynamicProperty(PROP_PALETTE) || DEFAULT_PALETTE_ID,
     layoutVersion: getLayoutVersion(elder),
     chest: {
       x: elder.getDynamicProperty(PROP_CHEST_X),
@@ -248,7 +241,7 @@ export function getVillageState(elder) {
 }
 
 /** Applies any quest discounts the village has earned to the raw level requirements. */
-export function getEffectiveRequirements(elder, level) {
+function getEffectiveRequirements(elder, level) {
   const cfg = LEVELS[level];
   if (!cfg) return null;
   const result = {};
@@ -533,7 +526,7 @@ export function tryLevelUp(elder, options) {
       try {
         fort = buildFortifications(dimension, state.origin, state.facing,
           fullVillageMaxForward(), cfg.fortify, builtPlotFootprints(nextLevel));
-        elder.setDynamicProperty("village:tier", cfg.fortify);
+        elder.setDynamicProperty(PROP_TIER, cfg.fortify);
 
         // Station a guard in each tower's guard post. The wall ring can sit
         // 40-60 blocks from wherever the level-up was triggered - the

@@ -57,7 +57,7 @@ export const QUESTS = {
 };
 
 export function getQuestFor(professionName) { return QUESTS[professionName] || null; }
-export function getQuestStep(npc) { return npc?.getDynamicProperty("quest_step") || 0; }
+function getQuestStep(npc) { return npc?.getDynamicProperty("quest_step") || 0; }
 function countInInventory(container, typeId) { let total = 0; for (let i = 0; i < container.size; i++) { const stack = container.getItem(i); if (stack && stack.typeId === typeId) total += stack.amount; } return total; }
 function removeFromInventory(container, typeId, amount) { let remaining = amount; for (let i = 0; i < container.size && remaining > 0; i++) { const stack = container.getItem(i); if (!stack || stack.typeId !== typeId) continue; const take = Math.min(remaining, stack.amount); remaining -= take; if (take >= stack.amount) container.setItem(i, undefined); else { stack.amount -= take; container.setItem(i, stack); } } }
 

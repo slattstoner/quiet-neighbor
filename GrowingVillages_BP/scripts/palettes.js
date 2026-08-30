@@ -2,7 +2,12 @@ export const PALETTES = {
   plains: { id: "plains", label: "Равнины", wood: "oak", stone: "cobblestone", roof: "oak_stairs", surface: "grass_block" },
   meadow: { id: "meadow", label: "Луга", wood: "oak", stone: "stone_bricks", roof: "oak_stairs", surface: "grass_block" },
   taiga: { id: "taiga", label: "Тайга", wood: "spruce", stone: "cobblestone", roof: "spruce_stairs", surface: "grass_block" },
-  savanna: { id: "savanna", label: "Саванна", wood: "acacia", stone: "terracotta", roof: "acacia_stairs", surface: "grass_block" },
+  // Bedrock's plain terracotta block is "hardened_clay" - "terracotta" is the
+  // Java name and does not resolve, so a savanna village used to get houses
+  // with no foundation at all (setBlock swallows the throw). terrain.js has
+  // carried a comment saying exactly this since the tree-clearing fix; this
+  // palette was simply never updated to match.
+  savanna: { id: "savanna", label: "Саванна", wood: "acacia", stone: "hardened_clay", roof: "acacia_stairs", surface: "grass_block" },
   desert: { id: "desert", label: "Пустыня", wood: "acacia", stone: "sandstone", roof: "sandstone_stairs", surface: "sand" }
 };
 
@@ -21,7 +26,7 @@ const BIOME_TO_PALETTE = {
   "minecraft:desert": "desert"
 };
 
-export function paletteForBiomeId(biomeId) {
+function paletteForBiomeId(biomeId) {
   return PALETTES[BIOME_TO_PALETTE[biomeId] || "plains"];
 }
 

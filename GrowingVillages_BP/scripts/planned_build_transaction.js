@@ -1,5 +1,6 @@
 import { buildSpecialBuilding } from "./special_buildings_16_18.js";
 import { buildFinalCityBuilding } from "./final_city_19_20.js";
+import { PROP_PALETTE, readPlacementContext, readProperty } from "./village_state.js";
 
 /**
  * Isolated architecture-side transaction adapter for canonical future builds.
@@ -62,18 +63,13 @@ function connectorFrom(shape) {
 }
 
 function elderContext(elder, request) {
-  const origin = {
-    x: elder?.getDynamicProperty?.("village:originX"),
-    y: elder?.getDynamicProperty?.("village:originY"),
-    z: elder?.getDynamicProperty?.("village:originZ")
-  };
-  const facing = elder?.getDynamicProperty?.("village:facing");
-  if (!elder?.dimension || ![origin.x, origin.y, origin.z].every(Number.isFinite) || !Number.isInteger(facing) || facing < 0 || facing > 3) return null;
+  const placement = readPlacementContext(elder);
+  if (!elder?.dimension || !placement) return null;
   return Object.freeze({
     dimension: elder.dimension,
-    origin: Object.freeze(origin),
-    facing,
-    paletteId: request.paletteId === undefined ? elder.getDynamicProperty("village:palette") : request.paletteId
+    origin: Object.freeze(placement.origin),
+    facing: placement.facing,
+    paletteId: request.paletteId === undefined ? readProperty(elder, PROP_PALETTE) : request.paletteId
   });
 }
 

@@ -204,16 +204,6 @@ export function fullVillageMaxForward() {
   return maxForwardForLevel(MAX_BETA_LEVEL);
 }
 
-export function requirementsText(level) {
-  const cfg = LEVELS[level];
-  if (!cfg) return "На этом уровне бета-версия мода заканчивается. Дальнейшие уровни выйдут в следующих обновлениях.";
-  const lines = Object.entries(cfg.requirements).map(([id, count]) => {
-    const shortName = id.replace("minecraft:", "");
-    return `- ${shortName}: ${count}`;
-  });
-  return `Чтобы построить "${cfg.label}" (уровень ${level}), принесите в сундук ратуши:\n${lines.join("\n")}`;
-}
-
 export function runLevelBuild(dimension, origin, facing, level, paletteId) {
   const cfg = LEVELS[level];
   if (!cfg) return null;

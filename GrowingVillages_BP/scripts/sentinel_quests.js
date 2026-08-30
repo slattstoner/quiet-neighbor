@@ -1,5 +1,7 @@
 import { ItemStack, EnchantmentTypes } from "@minecraft/server";
 import { resolveCraftsmanRole } from "./craftsman_quests.js";
+import { countItems, inventoryContainer, removeExact, restoreContainer, snapshotContainer } from "./inventory.js";
+import { PROP_LEVEL, readProperty } from "./village_state.js";
 
 /**
  * The watchman's arc: "Стрела, что не долетела".
@@ -130,14 +132,6 @@ function neutral(reason, extra = {}) {
   return Object.freeze({ ok: false, status: "neutral", reason, ...extra });
 }
 
-function readProperty(entity, key) {
-  try {
-    return entity?.getDynamicProperty?.(key);
-  } catch (error) {
-    return undefined;
-  }
-}
-
 function villageTag(entity) {
   try {
     return entity?.getTags?.().find((tag) => tag.startsWith("village:")) || null;
@@ -182,52 +176,6 @@ function applyEnchantments(stack, enchantments) {
       /* incompatible or out-of-bounds on this build - skip this one */
     }
   }
-}
-
-function inventoryContainer(player) {
-  try {
-    return player?.getComponent?.("minecraft:inventory")?.container || null;
-  } catch (error) {
-    return null;
-  }
-}
-
-function countItems(container, typeId) {
-  let total = 0;
-  for (let slot = 0; slot < container.size; slot++) {
-    const stack = container.getItem(slot);
-    if (stack?.typeId === typeId) total += stack.amount;
-  }
-  return total;
-}
-
-function snapshotContainer(container) {
-  return Array.from({ length: container.size }, (_, slot) => {
-    const stack = container.getItem(slot);
-    return stack ? stack.clone() : undefined;
-  });
-}
-
-function restoreContainer(container, snapshot) {
-  for (let slot = 0; slot < container.size; slot++) {
-    container.setItem(slot, snapshot[slot]);
-  }
-}
-
-function removeExact(container, typeId, amount) {
-  let remaining = amount;
-  for (let slot = 0; slot < container.size && remaining > 0; slot++) {
-    const stack = container.getItem(slot);
-    if (!stack || stack.typeId !== typeId) continue;
-    const taken = Math.min(remaining, stack.amount);
-    remaining -= taken;
-    if (taken === stack.amount) container.setItem(slot, undefined);
-    else {
-      stack.amount -= taken;
-      container.setItem(slot, stack);
-    }
-  }
-  return remaining === 0;
 }
 
 /**
@@ -298,7 +246,7 @@ export function getSentinelArcView(npc, elder) {
   if (!elder) return neutral("no_elder", { roleId });
   if (!sameVillage(npc, elder)) return neutral("different_village", { roleId });
 
-  const level = readProperty(elder, "village:level");
+  const level = readProperty(elder, PROP_LEVEL);
   if (!Number.isInteger(level)) return neutral("invalid_level", { roleId });
   if (level < SENTINEL_ARC.minLevel) {
     return Object.freeze({ ok: true, status: "locked", roleId, arc: SENTINEL_ARC, level, minLevel: SENTINEL_ARC.minLevel });
