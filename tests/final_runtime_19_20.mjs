@@ -285,13 +285,16 @@ console.log("\n=== elder UI surface ===");
     ActionFormData.prototype.show = async () => ({ canceled: true, selection: 0 });
     rendered = [];
     await openElderMenu(ready.player, ready.elder);
-    assert(rendered.length === 4 && labelOf(rendered[2]) === "growing_villages.ui.elder.final.button",
-      "an L18-committed village gains exactly the great-works button, not the special-chapter one");
+    const FINAL_BUTTON = "growing_villages.ui.elder.final.button";
+    // Found by label rather than by index: the elder menu gains buttons as the
+    // mod grows, and this test is about which button appears, not where.
+    const finalIndex = rendered.findIndex((entry) => labelOf(entry) === FINAL_BUTTON);
+    assert(finalIndex >= 0, "an L18-committed village gains the great-works button");
     assert(!rendered.some((entry) => labelOf(entry) === "growing_villages.ui.elder.special.button"),
       "the L16-18 button never appears once that stage is fully committed");
 
     let call = 0;
-    ActionFormData.prototype.show = async () => (++call === 1 ? { canceled: false, selection: 2 } : { canceled: false, selection: 0 });
+    ActionFormData.prototype.show = async () => (++call === 1 ? { canceled: false, selection: finalIndex } : { canceled: false, selection: 0 });
     fillChest(ready.elder, requirementsFor(19));
     await openElderMenu(ready.player, ready.elder);
     assert(ready.elder.getDynamicProperty(extensionLevelReadyKey(19)) === true, "confirming the deposit form writes the ready flag");

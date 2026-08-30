@@ -1,3 +1,4 @@
+import { world } from "@minecraft/server";
 import { ActionFormData, MessageFormData } from "@minecraft/server-ui";
 import { effectiveRequirementsText, tryLevelUp, chestSatisfiesRequirements } from "./village.js";
 import { applyCraftsmanUpgrade } from "./upgrades.js";
@@ -12,6 +13,22 @@ import {
 } from "./sentinel_quests.js";
 import { SPECIAL_QUESTS, getSpecialQuestStep, turnInSpecialQuest, alchemistProducts, buyAlchemistProduct } from "./special_content.js";
 import { buildChapterJournalModel } from "./chapter_journal.js";
+import { contractView, turnInContract } from "./contracts.js";
+
+/**
+ * Which in-game day it is. Contracts rotate on it, so every player at the same
+ * village is offered the same errand, and a different one tomorrow, with
+ * nothing to store. Falls back to day zero rather than throwing: a menu that
+ * cannot open is worse than a contract that does not rotate.
+ */
+function currentWorldDay() {
+  try {
+    const day = world.getDay();
+    return Number.isFinite(day) ? day : 0;
+  } catch (error) {
+    return 0;
+  }
+}
 import {
   extensionMenuAvailable,
   getExtensionStatus,
@@ -162,6 +179,56 @@ export async function openVillageJournal(player, elder) {
   if (response.selection === 0) return openElderMenu(player, elder);
 }
 
+/**
+ * The elder's contract screen: one standing errand, a different one each day.
+ */
+async function openContractMenu(player, elder) {
+  const day = currentWorldDay();
+  const view = contractView(elder, day);
+  const standing = `§7Заслуги перед деревней: §f${view.standing}§7 (выполнено подрядов: ${view.completed}).`;
+
+  if (!view.contract) {
+    await new MessageFormData().title("Подряды деревни")
+      .body(`Деревня ещё слишком мала, чтобы просить о подрядах.\n\n${standing}`)
+      .button1("Понятно").button2("Закрыть").show(player);
+    return;
+  }
+  if (!view.available) {
+    await new MessageFormData().title(view.contract.title)
+      .body(`Сегодняшний подряд уже закрыт. Загляни завтра.\n\n${standing}`)
+      .button1("Понятно").button2("Закрыть").show(player);
+    return;
+  }
+
+  const contract = view.contract;
+  const discountNote = view.standing > 0
+    ? "\n\n§7Заслуги уменьшают требования следующего уровня — но не больше чем на четверть."
+    : "\n\n§7Каждый закрытый подряд немного снижает требования следующего уровня.";
+  const response = await new ActionFormData()
+    .title(contract.title)
+    .body(`${contract.ask}\n\n§7Награда: §f${contract.rewardAmount} x ${contract.rewardItem.replace("minecraft:", "")}\n${standing}${discountNote}`)
+    .button("Сдать подряд")
+    .button("Позже")
+    .show(player);
+  if (!isUsableEntity(player) || !isUsableEntity(elder) || response.canceled || response.selection !== 0) return;
+
+  const result = turnInContract(player, elder, currentWorldDay());
+  if (result.ok) {
+    announceToNearbyPlayers(elder, `§eСтароста: §rПодряд закрыт. Деревня это запомнит.`);
+    await new MessageFormData().title(contract.title)
+      .body(`Сделано. §7Заслуги: §f${result.standing}§7, всего подрядов: §f${result.completed}§7.`)
+      .button1("Хорошо").button2("Закрыть").show(player);
+    return;
+  }
+  const problem = result.reason === "not_enough"
+    ? `Не хватает: нужно ${result.need}, у тебя ${result.have}.`
+    : result.reason === "done_today"
+      ? "Сегодняшний подряд уже закрыт."
+      : "Сейчас подряд принять не выходит.";
+  await new MessageFormData().title(contract.title).body(problem)
+    .button1("Понятно").button2("Закрыть").show(player);
+}
+
 export async function openElderMenu(player, elder) {
   if (!isUsableEntity(player) || !isUsableEntity(elder)) return;
   const journal = buildChapterJournalModel(elder);
@@ -169,46 +236,51 @@ export async function openElderMenu(player, elder) {
   // a village is never both mid-L16-18 and mid-L19-20 at once.
   const showExtension = extensionMenuAvailable(elder);
   const showFinal = !showExtension && finalCityMenuAvailable(elder);
-  const form = new ActionFormData()
-    .title("Староста")
-    .body(effectiveRequirementsText(elder))
-    .button("Проверить сундук и построить")
-    .button(translated(journal.keys.button));
-  if (showExtension) form.button(translated(EXTENSION_KEYS.button));
-  if (showFinal) form.button(translated(FINAL_KEYS.button));
+
+  // Built as a list rather than by counting button indexes. Two of these
+  // buttons are conditional, and hand-numbered selections against a form whose
+  // shape changes is exactly how a menu ends up opening the wrong screen.
+  const actions = [
+    { label: "Проверить сундук и построить", run: () => levelUpFromMenu(player, elder) },
+    { label: "Подряды деревни", run: () => openContractMenu(player, elder) },
+    { label: translated(journal.keys.button), run: () => openVillageJournal(player, elder) }
+  ];
+  if (showExtension) actions.push({ label: translated(EXTENSION_KEYS.button), run: () => openExtensionMenu(player, elder) });
+  if (showFinal) actions.push({ label: translated(FINAL_KEYS.button), run: () => openFinalCityMenu(player, elder) });
+
+  const form = new ActionFormData().title("Староста").body(effectiveRequirementsText(elder));
+  for (const action of actions) form.button(action.label);
   form.button("Закрыть");
 
   const response = await form.show(player);
   if (!isUsableEntity(player) || !isUsableEntity(elder) || response.canceled) return;
+  const chosen = actions[response.selection];
+  if (chosen) return chosen.run();
+}
 
-  if (response.selection === 1) return openVillageJournal(player, elder);
-  if (showExtension && response.selection === 2) return openExtensionMenu(player, elder);
-  if (showFinal && response.selection === 2) return openFinalCityMenu(player, elder);
-
-  if (response.selection === 0) {
-    const check = chestSatisfiesRequirements(elder);
-    if (check.finished) {
-      await new MessageFormData()
-        .title("Староста")
-        .body("Деревня уже достигла максимума этой бета-версии. Спасибо, что помог нам вырасти!")
-        .button1("Понятно")
-        .button2("Закрыть")
-        .show(player);
-      return;
-    }
-    if (!check.done) {
-      await new MessageFormData()
-        .title("Староста")
-        .body("В сундуке ратуши пока не хватает ресурсов. Загляни ещё раз, когда принесёшь всё нужное.")
-        .button1("Понятно")
-        .button2("Закрыть")
-        .show(player);
-      return;
-    }
-    const result = tryLevelUp(elder);
-    if (result.done && result.leveledUpTo) {
-      announceToNearbyPlayers(elder, `§eСтароста: §rНаконец-то! "${result.label}" готов(а). Деревня растёт!`);
-    }
+async function levelUpFromMenu(player, elder) {
+  const check = chestSatisfiesRequirements(elder);
+  if (check.finished) {
+    await new MessageFormData()
+      .title("Староста")
+      .body("Деревня уже достигла максимума этой бета-версии. Спасибо, что помог нам вырасти!")
+      .button1("Понятно")
+      .button2("Закрыть")
+      .show(player);
+    return;
+  }
+  if (!check.done) {
+    await new MessageFormData()
+      .title("Староста")
+      .body("В сундуке ратуши пока не хватает ресурсов. Загляни ещё раз, когда принесёшь всё нужное.")
+      .button1("Понятно")
+      .button2("Закрыть")
+      .show(player);
+    return;
+  }
+  const result = tryLevelUp(elder);
+  if (result.done && result.leveledUpTo) {
+    announceToNearbyPlayers(elder, `§eСтароста: §rНаконец-то! "${result.label}" готов(а). Деревня растёт!`);
   }
 }
 

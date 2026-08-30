@@ -428,23 +428,32 @@ console.log("\n=== elder UI surface ===");
   const labelOf = (entry) => (entry && typeof entry === "object" ? entry.translate : entry);
 
   try {
+    const SPECIAL_BUTTON = "growing_villages.ui.elder.special.button";
     ActionFormData.prototype.show = async () => ({ canceled: true, selection: 0 });
     const below = makeVillage(10);
     rendered = [];
     await openElderMenu(below.player, below.elder);
-    assert(rendered.length === 3 && !rendered.some((entry) => labelOf(entry) === "growing_villages.ui.elder.special.button"),
-      "an L10 village sees the unchanged three-button elder menu");
+    // The baseline is measured rather than written down: the elder menu grows
+    // as the mod does (the contracts button was the most recent addition), and
+    // a hardcoded count would fail every time for reasons that have nothing to
+    // do with what this test is about.
+    const baselineButtons = rendered.length;
+    assert(!rendered.some((entry) => labelOf(entry) === SPECIAL_BUTTON),
+      "an L10 village sees no special-chapter button");
 
     const ready = makeVillage(15);
     rendered = [];
     await openElderMenu(ready.player, ready.elder);
-    assert(rendered.length === 4 && labelOf(rendered[2]) === "growing_villages.ui.elder.special.button",
-      "a ready L15 village gains exactly one extra elder button");
+    assert(rendered.length === baselineButtons + 1, `a ready L15 village gains exactly one extra elder button (${rendered.length} vs ${baselineButtons})`);
+    assert(rendered.filter((entry) => labelOf(entry) === SPECIAL_BUTTON).length === 1,
+      "…and that button is the special-chapter one");
     assert(!rendered.some((entry) => /founders|beacon|19|20/.test(String(labelOf(entry)))),
       "the elder menu exposes no premature L19/L20 entry");
 
+    // Selecting by label, not by a hardcoded index, for the same reason.
+    const specialIndex = rendered.findIndex((entry) => labelOf(entry) === SPECIAL_BUTTON);
     let call = 0;
-    ActionFormData.prototype.show = async () => (++call === 1 ? { canceled: false, selection: 2 } : { canceled: false, selection: 1 });
+    ActionFormData.prototype.show = async () => (++call === 1 ? { canceled: false, selection: specialIndex } : { canceled: false, selection: 1 });
     rendered = [];
     await openElderMenu(ready.player, ready.elder);
     assert(rendered.some((entry) => labelOf(entry) === "growing_villages.ui.elder.special.turn_in"),
@@ -467,7 +476,8 @@ console.log("\n=== elder UI surface ===");
     legacy.elder.setDynamicProperty("village:layoutVersion", undefined);
     rendered = [];
     await openElderMenu(legacy.player, legacy.elder);
-    assert(rendered.length === 3, "a legacy village never gains the special-chapter button");
+    assert(rendered.length === baselineButtons && !rendered.some((entry) => labelOf(entry) === SPECIAL_BUTTON),
+      "a legacy village never gains the special-chapter button");
   } finally {
     ActionFormData.prototype.button = originalButton;
     ActionFormData.prototype.show = originalActionShow;

@@ -9,6 +9,7 @@ import {
 import { buildFortifications, perimeterFor } from "./walls.js";
 import { buildDefenceStageJob, clearStageRingJob, planDefenceStage, previousDefenceStage } from "./defences_roads.js";
 import { assignPatrol } from "./patrol.js";
+import { standingDiscountFor } from "./contracts.js";
 import { generateVillageName, updateGateSign } from "./signboard.js";
 import { holdLoadedArea, prepareSite, sampleGroundLevel, withLoadedArea, withRetry } from "./terrain.js";
 import { paletteAt, paletteById } from "./palettes.js";
@@ -264,14 +265,29 @@ export function getVillageState(elder) {
   };
 }
 
-/** Applies any quest discounts the village has earned to the raw level requirements. */
+/**
+ * Applies every discount the village has earned to the raw level requirements.
+ *
+ * Two sources, and they stack: the one-off discounts a completed craftsman
+ * chain writes to `village:discount:<level>:<item>`, and the standing earned
+ * from repeatable contracts. Standing is capped per item inside
+ * standingDiscountFor(), and the floor of 1 here means no requirement can ever
+ * be discounted out of existence.
+ */
 function getEffectiveRequirements(elder, level) {
   const cfg = LEVELS[level];
   if (!cfg) return null;
+  let standing = {};
+  try {
+    standing = standingDiscountFor(elder, level);
+  } catch (error) {
+    // Discounts are a bonus; failing to read them must never block a level-up.
+    console.warn("[village] standing discount unavailable: " + error);
+  }
   const result = {};
   for (const [id, count] of Object.entries(cfg.requirements)) {
     const key = `village:discount:${level}:${id}`;
-    const discount = elder.getDynamicProperty(key) || 0;
+    const discount = (elder.getDynamicProperty(key) || 0) + (standing[id] || 0);
     result[id] = Math.max(1, count - discount);
   }
   return result;
