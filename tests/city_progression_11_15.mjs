@@ -130,7 +130,12 @@ console.log("\n=== chapter hook and runtime ownership boundaries ===");
 const villageSource = fs.readFileSync(new URL("./scripts/village.js", import.meta.url), "utf8");
 const connectorSource = fs.readFileSync(new URL("./scripts/city_connectors.js", import.meta.url), "utf8");
 assert(villageSource.includes("setVillageChapterForLevel(elder, nextLevel)"), "successful city path preserves the existing chapter update hook with the real level");
-assert(!villageSource.includes("buildDefenceStage") && !connectorSource.includes("buildDefenceStage"), "city runtime does not activate isolated defence stages");
+// village.js now drives the crossroads defence stages deliberately - level 15
+// is the one city level that also moves the wall, pushing the castle curtain
+// from R78 out to R94 so the L12-L18 plots end up inside it. The connector
+// module stays out of defences entirely: it only paves a plot's approach.
+assert(villageSource.includes("buildDefenceStageJob"), "city runtime drives the crossroads defence stages");
+assert(!connectorSource.includes("buildDefenceStage"), "the plot connector still has nothing to do with defences");
 assert(!connectorSource.includes("prepareFortifiedArea") && !connectorSource.includes("189"), "connector never requests full-square terrain preparation");
 
 console.log(failures === 0

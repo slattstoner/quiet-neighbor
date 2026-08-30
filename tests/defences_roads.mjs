@@ -168,9 +168,17 @@ for (let facing = 0; facing < 4; facing++) {
 console.log("\n=== runtime isolation and narrow-policy source guards ===");
 const defenceSource = fs.readFileSync(new URL("./scripts/defences_roads.js", import.meta.url), "utf8");
 assert(!defenceSource.includes("prepareFortifiedArea") && !defenceSource.includes("prepareSite("), "defence module does not use full-square terrain helpers");
-for (const rel of ["../GrowingVillages_BP/scripts/main.js", "../GrowingVillages_BP/scripts/village.js", "../GrowingVillages_BP/scripts/levels.js"]) {
+// village.js is the one runtime module that drives the defence stages: it is
+// what makes the crossroads real. Everything else still keeps its distance -
+// main.js has no business building walls, and levels.js must not, because
+// defences_roads.js imports builder.js and levels.js is imported *by*
+// builder.js's callers, so a dependency the other way round would close a
+// cycle.
+const villageRuntime = fs.readFileSync(new URL("../GrowingVillages_BP/scripts/village.js", import.meta.url), "utf8");
+assert(villageRuntime.includes('from "./defences_roads.js"'), "village.js: runtime drives the defence module");
+for (const rel of ["../GrowingVillages_BP/scripts/main.js", "../GrowingVillages_BP/scripts/levels.js"]) {
   const source = fs.readFileSync(new URL(rel, import.meta.url), "utf8");
-  assert(!source.includes("defences_roads"), `${rel.split("/").pop()}: runtime does not import isolated defence module`);
+  assert(!source.includes("defences_roads"), `${rel.split("/").pop()}: does not import the defence module`);
 }
 
 console.log(failures === 0

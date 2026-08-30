@@ -127,7 +127,12 @@ export const SPATIAL_PLAN = Object.freeze([
   planEntry({ level: 7, buildingId: "resident_house", bounds: rect(-28, -18, -16, -4), roadLink: { type: "plot_path", axis: "forward", width: 2 }, note: "Residential plot." }),
   planEntry({ level: 8, buildingId: "fortification_cobble", bounds: rect(23, 32, -16, -4), roadLink: { type: "plot_path", axis: "forward", width: 2 }, note: "The level record reserves a ward house; cobble wall radius is scheduled separately." }),
   planEntry({ level: 9, buildingId: "artisan_house", bounds: rect(24, 34, 4, 16), roadLink: { type: "plot_path", axis: "forward", width: 2 }, note: "Artisan or expanded residential plot." }),
-  planEntry({ level: 10, buildingId: "fortification_castle", bounds: rect(36, 44, -16, -4), roadLink: { type: "plot_path", axis: "forward", width: 2 }, note: "The level record reserves a ward house; castle wall radius is scheduled separately." }),
+  // fMin is 35, not 36: the ward house here is built while the R44 palisade is
+  // still standing (this level raises R78 and takes R44 down straight after),
+  // so its far end has to stop short of forward 44. Pulling the house back one
+  // block to clear the ring puts its roof eaves at 35, and the envelope has to
+  // contain every block the building actually places, eaves included.
+  planEntry({ level: 10, buildingId: "fortification_castle", bounds: rect(35, 44, -16, -4), roadLink: { type: "plot_path", axis: "forward", width: 2 }, note: "The level record reserves a ward house; castle wall radius is scheduled separately." }),
   planEntry({ level: 11, buildingId: "market_square", bounds: rect(-42, -30, 6, 20), roadLink: { type: "pedestrian_path", axis: "forward", width: 2 }, note: "Market stalls and a public water feature." }),
   planEntry({ level: 12, buildingId: "granary_yard", bounds: rect(8, 36, 48, 66), roadLink: { type: "service_path", axis: "side", width: 2 }, note: "Storage, threshing and cart yard; no production-cap increase." }),
   planEntry({ level: 13, buildingId: "travellers_inn", bounds: rect(40, 66, -42, -18), roadLink: { type: "service_path", axis: "forward", width: 2 }, note: "Inn, stable and service yard." }),

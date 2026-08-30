@@ -30,6 +30,34 @@ const SPECIAL_BUILDINGS = {
   engineer: { label: "Дом мастера механизмов", forward: 14, side: -24, profession: "Инженер", tag: "village_engineer", unlockLevel: 8 }
 };
 
+/**
+ * Crossroads plots for the same five sheds.
+ *
+ * Their legacy plots assume one street and two empty quadrants: on the
+ * crossroads the old-timer's shed (forward 0) would straddle the side road,
+ * the ranger's would land inside the level-5 ward plot and the engineer's
+ * inside the farmer's yard. These plots put each shed in genuinely free
+ * ground in its own corner of the crossroads, still well inside the R44
+ * palisade that stands when the first of them unlocks.
+ */
+const V2_SPECIAL_PLOTS = Object.freeze({
+  alchemist: Object.freeze({ forward: 6, side: 22 }),
+  oldtimer: Object.freeze({ forward: -6, side: -22 }),
+  ranger: Object.freeze({ forward: -30, side: 26 }),
+  healer: Object.freeze({ forward: 6, side: 34 }),
+  engineer: Object.freeze({ forward: -6, side: -34 })
+});
+
+const LAYOUT_V2 = 2;
+
+/** Where a shed stands, for the village's layout version. */
+export function specialPlacement(key, layoutVersion) {
+  const spec = SPECIAL_BUILDINGS[key];
+  if (!spec) return null;
+  const v2 = layoutVersion === LAYOUT_V2 ? V2_SPECIAL_PLOTS[key] : null;
+  return { forward: v2 ? v2.forward : spec.forward, side: v2 ? v2.side : spec.side };
+}
+
 const PLUS_SIDE = ["south", "north", "east", "west"];
 const MINUS_SIDE = ["north", "south", "west", "east"];
 
@@ -131,14 +159,14 @@ function furnish(centerF, centerS, fittings) {
   }));
 }
 
-function shedAt(key, dimension, origin, facing, materials, fittings) {
-  const spec = SPECIAL_BUILDINGS[key];
-  const shape = shed(dimension, origin, facing, spec.forward, spec.side,
-    materials, furnish(spec.forward, spec.side, fittings));
+function shedAt(key, dimension, origin, facing, materials, fittings, layoutVersion) {
+  const at = specialPlacement(key, layoutVersion);
+  const shape = shed(dimension, origin, facing, at.forward, at.side,
+    materials, furnish(at.forward, at.side, fittings));
   return { ...shape, building: key };
 }
 
-function buildAlchemist(dimension, origin, facing) {
+function buildAlchemist(dimension, origin, facing, layoutVersion) {
   return shedAt("alchemist", dimension, origin, facing,
     { foundation: "minecraft:stone_bricks", wall: "minecraft:purple_terracotta", corner: "minecraft:dark_oak_log", roof: "minecraft:dark_oak_planks" },
     [
@@ -147,10 +175,10 @@ function buildAlchemist(dimension, origin, facing) {
       { typeId: "minecraft:barrel" },
       { typeId: "minecraft:chest" },
       { typeId: "minecraft:flower_pot" }
-    ]);
+    ], layoutVersion);
 }
 
-function buildOldtimer(dimension, origin, facing) {
+function buildOldtimer(dimension, origin, facing, layoutVersion) {
   return shedAt("oldtimer", dimension, origin, facing,
     { foundation: "minecraft:stone_bricks", wall: "minecraft:spruce_planks", corner: "minecraft:spruce_log", roof: "minecraft:spruce_planks" },
     [
@@ -159,10 +187,10 @@ function buildOldtimer(dimension, origin, facing) {
       { typeId: "minecraft:chest" },
       { typeId: "minecraft:bell", states: { attachment: "standing", "minecraft:cardinal_direction": "south" } },
       { typeId: "minecraft:cartography_table" }
-    ]);
+    ], layoutVersion);
 }
 
-function buildRanger(dimension, origin, facing) {
+function buildRanger(dimension, origin, facing, layoutVersion) {
   const shape = shedAt("ranger", dimension, origin, facing,
     { foundation: "minecraft:cobblestone", wall: "minecraft:oak_planks", corner: "minecraft:spruce_log", roof: "minecraft:oak_planks" },
     [
@@ -171,7 +199,7 @@ function buildRanger(dimension, origin, facing) {
       { typeId: "minecraft:chest" },
       { typeId: "minecraft:oak_fence" },
       { typeId: "minecraft:campfire", states: { extinguished: false } }
-    ]);
+    ], layoutVersion);
   // A row of saplings just outside the shed, on the side away from the road.
   const nurseryS = shape.centerS + (shape.centerS >= 0 ? 3 : -3);
   for (let df = -2; df <= 2; df++) {
@@ -180,7 +208,7 @@ function buildRanger(dimension, origin, facing) {
   return shape;
 }
 
-function buildHealer(dimension, origin, facing) {
+function buildHealer(dimension, origin, facing, layoutVersion) {
   return shedAt("healer", dimension, origin, facing,
     { foundation: "minecraft:quartz_block", wall: "minecraft:white_wool", corner: "minecraft:birch_log", roof: "minecraft:red_wool" },
     [
@@ -189,10 +217,10 @@ function buildHealer(dimension, origin, facing) {
       { typeId: "minecraft:chest" },
       { typeId: "minecraft:bed" },
       { typeId: "minecraft:flower_pot" }
-    ]);
+    ], layoutVersion);
 }
 
-function buildEngineer(dimension, origin, facing) {
+function buildEngineer(dimension, origin, facing, layoutVersion) {
   return shedAt("engineer", dimension, origin, facing,
     { foundation: "minecraft:stone_bricks", wall: "minecraft:brick_block", corner: "minecraft:iron_block", roof: "minecraft:copper_block" },
     [
@@ -201,7 +229,7 @@ function buildEngineer(dimension, origin, facing) {
       { typeId: "minecraft:barrel" },
       { typeId: "minecraft:lever" },
       { typeId: "minecraft:observer" }
-    ]);
+    ], layoutVersion);
 }
 
 const BUILDERS = { alchemist: buildAlchemist, oldtimer: buildOldtimer, ranger: buildRanger, healer: buildHealer, engineer: buildEngineer };
@@ -211,20 +239,21 @@ const BUILDERS = { alchemist: buildAlchemist, oldtimer: buildOldtimer, ranger: b
  * levels.js uses for house plots. Matches the footprint
  * buildSpecialBuilding() levels before building (spec.forward/side +/- 6).
  */
-function specialFootprint(key) {
+function specialFootprint(key, layoutVersion) {
   const spec = SPECIAL_BUILDINGS[key];
-  if (!spec) return null;
+  const at = specialPlacement(key, layoutVersion);
+  if (!spec || !at) return null;
   return {
-    fMin: spec.forward - 6, fMax: spec.forward + 6,
-    sMin: spec.side - 6, sMax: spec.side + 6,
+    fMin: at.forward - 6, fMax: at.forward + 6,
+    sMin: at.side - 6, sMax: at.side + 6,
     unlockLevel: spec.unlockLevel
   };
 }
 
 /** Every special plot unlocked at or below `uptoLevel`. */
-export function specialFootprintsUpTo(uptoLevel) {
+export function specialFootprintsUpTo(uptoLevel, layoutVersion) {
   return Object.keys(SPECIAL_BUILDINGS)
-    .map(specialFootprint)
+    .map((key) => specialFootprint(key, layoutVersion))
     .filter((rect) => rect && uptoLevel >= rect.unlockLevel);
 }
 
@@ -234,6 +263,8 @@ export function buildSpecialBuilding(key, dimension, state) {
   const builder = BUILDERS[key];
   const spec = SPECIAL_BUILDINGS[key];
   if (!builder || !spec || !dimension || !state) return { ok: false, reason: "unknown_building" };
+  const layoutVersion = state.layoutVersion;
+  const at = specialPlacement(key, layoutVersion);
   if (state.elder?.getDynamicProperty(`village:specialBuilt:${key}`)) return { ok: true, alreadyBuilt: true };
   try {
     // These sheds sit far down the street (forward 48-60) - past the core
@@ -244,12 +275,12 @@ export function buildSpecialBuilding(key, dimension, state) {
     // real terrain there looked like - floating over a dip, or half-buried
     // in a rise. Level the same way every other building on the street
     // already does before handing off to the builder.
-    const footprint = { fMin: spec.forward - 6, fMax: spec.forward + 6, sMin: spec.side - 6, sMax: spec.side + 6 };
+    const footprint = { fMin: at.forward - 6, fMax: at.forward + 6, sMin: at.side - 6, sMax: at.side + 6 };
     withLoadedArea(dimension, state.origin, state.facing, footprint, () => {
       const sample = sampleGroundLevel(dimension, state.origin, state.facing,
         footprint.fMin, footprint.fMax, footprint.sMin, footprint.sMax);
       prepareSite(dimension, state.origin, state.facing,
-        spec.forward - 4, spec.forward + 4, spec.side - 5, spec.side + 5, {
+        at.forward - 4, at.forward + 4, at.side - 5, at.side + 5, {
           padding: 0,
           clearHeight: 9,
           fillDepth: 6,
@@ -257,7 +288,7 @@ export function buildSpecialBuilding(key, dimension, state) {
           surfaceType: sample.surfaceType
         });
     });
-    const shape = builder(dimension, state.origin, state.facing);
+    const shape = builder(dimension, state.origin, state.facing, layoutVersion);
     if (state.elder) state.elder.setDynamicProperty(`village:specialBuilt:${key}`, true);
     return { ok: true, key, shape, label: SPECIAL_BUILDINGS[key].label };
   } catch (error) {

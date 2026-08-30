@@ -486,6 +486,7 @@ export function withLoadedArea(dimension, origin, facing, rect, fn, holdTicks = 
 export function holdLoadedArea(dimension, origin, facing, rect) {
   const names = [];
   if (typeof dimension.runCommand !== "function") return () => {};
+  const gridId = gridCounter++;
 
   const corners = [
     toWorld(origin, facing, rect.fMin, rect.sMin, 0),
@@ -508,7 +509,7 @@ export function holdLoadedArea(dimension, origin, facing, rect) {
       try {
         dimension.runCommand(
           `tickingarea add ${x} ${y1} ${z} ${Math.min(x + SPAN - 1, x2)} ${y2} ${Math.min(z + SPAN - 1, z2)} ${name}`);
-        names.push(name);
+        names.push({ name, gridId });
       } catch (e) {
         // The engine also caps the world at 10 ticking areas; once that is
         // hit the rest of the grid simply is not covered. Nothing else to
@@ -522,19 +523,62 @@ export function holdLoadedArea(dimension, origin, facing, rect) {
   return (holdTicks = 0) => {
     if (released) return;
     released = true;
-    for (const name of names) releaseLoadedArea(dimension, name, holdTicks);
+    for (const area of names) releaseLoadedArea(dimension, area.name, area.gridId, holdTicks);
   };
 }
 
-// Bedrock allows only a handful of ticking areas per dimension, and holding
-// each one open for a while means several builds can overlap. Keep the held
-// set small by retiring the oldest as soon as a new one needs the room -
-// the oldest is also the one whose deferred work has had the longest to run.
+/** Number of ticking areas holdLoadedArea would need to cover `rect`. */
+export function loadedAreaCountFor(rect) {
+  const fSpan = Math.abs(rect.fMax - rect.fMin) + 5;
+  const sSpan = Math.abs(rect.sMax - rect.sMin) + 5;
+  const SPAN = 9 * 16;
+  return Math.ceil(fSpan / SPAN) * Math.ceil(sSpan / SPAN);
+}
+
+// Bedrock allows ten ticking areas per dimension, each up to 100 chunks
+// (https://learn.microsoft.com/en-us/minecraft/creator/documents/tickingareacommand).
+// Once that budget is spent the engine silently refuses the next `tickingarea
+// add`, so the held set is trimmed here rather than discovered as missing
+// blocks later.
+//
+// Eviction is per *grid*, not per area. One holdLoadedArea call over a large
+// rectangle registers several areas that a single running job depends on
+// together - the R94 curtain wall needs a 2x2 grid, and the level-up that
+// triggers it is already holding a grid of its own. Retiring one area out of
+// a live grid would leave that job writing into a hole in the middle of the
+// wall it is building, which is precisely the silent failure the ticking
+// areas exist to prevent. So the oldest grid goes whole, and it is also the
+// one whose deferred work has had the longest to finish.
+// The budget below counts only *lingering* areas - ones whose work is done
+// and that are being kept alive for a few more ticks. Areas still being used
+// by a running build are not in this list and are never evicted. Four leaves
+// six of the engine's ten free for the live grids, which is what an R94
+// curtain-wall stage (a 2x2 grid) plus the level-up holding the same ground
+// actually need at once.
 const heldAreas = [];
 const MAX_HELD_AREAS = 4;
+let gridCounter = 0;
+
+/** Retires whole grids, oldest first, until the engine's budget fits again. */
+function trimHeldAreas() {
+  while (heldAreas.length > MAX_HELD_AREAS) {
+    const oldestGrid = heldAreas[0].gridId;
+    const doomed = [];
+    // Drop the entries from the list here rather than letting remove() do it.
+    // remove() is a no-op once an area has already been released, so a list
+    // holding one of those would never shrink and this loop would spin
+    // forever - which is exactly what happens when the scheduler runs a
+    // timeout synchronously and the release lands before the push.
+    for (let i = heldAreas.length - 1; i >= 0; i--) {
+      if (heldAreas[i].gridId === oldestGrid) doomed.push(...heldAreas.splice(i, 1));
+    }
+    if (doomed.length === 0) return;
+    for (const held of doomed) held.remove();
+  }
+}
 
 /** Drops a temporary ticking area, keeping it alive for `holdTicks` first. */
-function releaseLoadedArea(dimension, name, holdTicks) {
+function releaseLoadedArea(dimension, name, gridId, holdTicks) {
   let released = false;
   const remove = () => {
     if (released) return;
@@ -548,8 +592,8 @@ function releaseLoadedArea(dimension, name, holdTicks) {
   if (holdTicks > 0) {
     try {
       system.runTimeout(remove, holdTicks);
-      heldAreas.push({ name, remove });
-      while (heldAreas.length > MAX_HELD_AREAS) heldAreas.shift().remove();
+      heldAreas.push({ name, gridId, remove });
+      trimHeldAreas();
       return;
     } catch (e) {
       /* no scheduler available - fall through and release immediately */

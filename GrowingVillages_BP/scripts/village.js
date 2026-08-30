@@ -1,10 +1,15 @@
-import { buildTownHall, buildCampfire, buildPlainHouse, interiorCenter } from "./builder.js";
+import { buildTownHall, buildCampfire, buildPlainHouse, interiorCenter, townHallFittings } from "./builder.js";
 import { toWorld, setBlock, randomId, coloredName, COLORS, VILLAGER_TYPE, ADULT_SPAWN_OPTIONS } from "./util.js";
-import { ItemStack } from "@minecraft/server";
-import { LEVELS, MAX_BETA_LEVEL, runLevelBuild, fullVillageMaxForward, isCityLevel, maxLevelForLayoutVersion, builtPlotFootprints } from "./levels.js";
+import { ItemStack, system } from "@minecraft/server";
+import {
+  LEVELS, MAX_BETA_LEVEL, runLevelBuild, fullVillageMaxForward, isCityLevel,
+  maxLevelForLayoutVersion, builtPlotFootprints, plotPlacementFor, plotSiteBoundsFor,
+  defenceStageForLevel, villageRadiusFor, V2_FOUNDING
+} from "./levels.js";
 import { buildFortifications, perimeterFor } from "./walls.js";
+import { buildDefenceStageJob, clearStageRingJob, planDefenceStage, previousDefenceStage } from "./defences_roads.js";
 import { generateVillageName, updateGateSign } from "./signboard.js";
-import { prepareSite, sampleGroundLevel, withLoadedArea, withRetry } from "./terrain.js";
+import { holdLoadedArea, prepareSite, sampleGroundLevel, withLoadedArea, withRetry } from "./terrain.js";
 import { paletteAt, paletteById } from "./palettes.js";
 import { spawnCraftsman, spawnResident, spawnGateGolem, spawnTowerGuard, setHome } from "./npc.js";
 import { ensureVillageChapterState, setVillageChapterForLevel } from "./chapter_state.js";
@@ -89,14 +94,22 @@ export function foundVillage(player, rawOrigin, facing, requestedPaletteId) {
   const id = randomId();
   const palette = requestedPaletteId ? paletteById(requestedPaletteId) : paletteAt(dimension, rawOrigin);
 
+  // Every village founded from now on uses the crossroads layout. The
+  // property itself is written further down (once building has succeeded), but
+  // the plots have to be chosen before the first block goes anywhere.
+  const layoutVersion = LAYOUT_VERSION_V2;
+  const plots = V2_FOUNDING;
+
   // Probe the terrain across the whole level-1 footprint and settle the
-  // village onto the median ground height. Side range covers the town
-  // hall (side 9, sMin..sMax = 5..13) and the starter house (side -9,
-  // sMin..sMax = -12..-6), each with a block of margin.
-  const sample = sampleGroundLevel(dimension, rawOrigin, facing, -10, 14, -13, 14);
+  // village onto the median ground height. The three level-1 plots are the
+  // town hall (f 2..12, s 2..12), the campfire plaza (f -9..-3, s 2..8) and
+  // the starter house (f 2..10, s -10..-2); this covers their union with a
+  // couple of blocks of margin on each side.
+  const site = { fMin: -11, fMax: 14, sMin: -12, sMax: 14 };
+  const sample = sampleGroundLevel(dimension, rawOrigin, facing, site.fMin, site.fMax, site.sMin, site.sMax);
   const origin = { x: rawOrigin.x, y: sample.y + 1, z: rawOrigin.z };
 
-  prepareSite(dimension, origin, facing, -10, 14, -13, 14, {
+  prepareSite(dimension, origin, facing, site.fMin, site.fMax, site.sMin, site.sMax, {
     padding: 1,
     clearHeight: 14,
     fillDepth: 6,
@@ -107,14 +120,17 @@ export function foundVillage(player, rawOrigin, facing, requestedPaletteId) {
   // Founding still happens right where the player used the bell, so this
   // small a footprint is normally already loaded - but guaranteeing it
   // costs nothing and keeps founding consistent with every later build.
-  withLoadedArea(dimension, origin, facing, { fMin: -11, fMax: 15, sMin: -14, sMax: 15 }, () => {
-    buildTownHall(dimension, origin, facing);
-    buildCampfire(dimension, origin, facing, -6, -6);
-    buildPlainHouse(dimension, origin, facing, 0, -9, palette.id);
+  let starterShape = null;
+  withLoadedArea(dimension, origin, facing, { fMin: site.fMin - 1, fMax: site.fMax + 1, sMin: site.sMin - 1, sMax: site.sMax + 1 }, () => {
+    buildTownHall(dimension, origin, facing, plots.townHall.plotForward, plots.townHall.side);
+    buildCampfire(dimension, origin, facing, plots.campfire.plotForward, plots.campfire.side);
+    starterShape = buildPlainHouse(dimension, origin, facing, plots.starterHouse.plotForward, plots.starterHouse.side, palette.id);
   });
 
-  // Progress chest inside the town hall (walls sit at side 5 and 13)
-  const chestPos = toWorld(origin, facing, 2, 7, 0);
+  // Progress chest and elder stand, derived from the hall's own plot rather
+  // than written out again as separate coordinates - see townHallFittings().
+  const fittings = townHallFittings(plots.townHall.plotForward, plots.townHall.side);
+  const chestPos = toWorld(origin, facing, fittings.chest.f, fittings.chest.s, 0);
   setBlock(dimension, chestPos.x, chestPos.y, chestPos.z, "minecraft:chest");
 
   // Elder, kept firmly inside the hall. Always spawned already-adult (see
@@ -122,7 +138,7 @@ export function foundVillage(player, rawOrigin, facing, requestedPaletteId) {
   // works differently for babies, and nothing here ever checked for or
   // fixed that, so it silently spawned however Bedrock's own randomizer
   // decided.
-  const elderPos = toWorld(origin, facing, 4, 9, 0);
+  const elderPos = toWorld(origin, facing, fittings.elder.f, fittings.elder.s, 0);
   const elder = dimension.spawnEntity(VILLAGER_TYPE, { x: elderPos.x + 0.5, y: elderPos.y, z: elderPos.z + 0.5 }, ADULT_SPAWN_OPTIONS);
   elder.nameTag = coloredName("Староста", COLORS.elder);
   elder.addTag("village_elder");
@@ -157,8 +173,12 @@ export function foundVillage(player, rawOrigin, facing, requestedPaletteId) {
     console.warn("[village] initial chapter state failed: " + e);
   }
 
-  // Starter resident in the first house
-  const residentPos = toWorld(origin, facing, 3, -8, 0);
+  // Starter resident in the first house, placed from the shape the house
+  // builder actually returned rather than from a second copy of its plot.
+  const residentLocal = starterShape
+    ? interiorCenter(starterShape)
+    : { f: plots.starterHouse.plotForward + 3, s: plots.starterHouse.side };
+  const residentPos = toWorld(origin, facing, residentLocal.f, residentLocal.s, 0);
   spawnResident(dimension, { x: residentPos.x + 0.5, y: residentPos.y, z: residentPos.z + 0.5 }, id, 5);
 
   // Notice board by the road, showing the village's name from day one
@@ -211,8 +231,11 @@ export function foundVillageAtLevel(player, rawOrigin, facing, targetLevel = 1, 
 /** Re-posts the gate notice board with the village's current standing. */
 export function refreshSign(elder) {
   const state = getVillageState(elder);
-  const rect = perimeterFor(fullVillageMaxForward());
-  return updateGateSign(elder.dimension, state.origin, state.facing, rect.fMax, {
+  // The board hangs on the +forward gate. On the crossroads that is one of
+  // four, and the wall it hangs on moves outward at levels 5/8/10/15, so the
+  // radius has to be asked for rather than assumed to be the legacy R48.
+  const gateForward = villageRadiusFor(state.level, state.layoutVersion);
+  return updateGateSign(elder.dimension, state.origin, state.facing, gateForward, {
     name: elder.getDynamicProperty("village:name") || "Деревня",
     level: state.level,
     tier: elder.getDynamicProperty(PROP_TIER) || 0,
@@ -350,6 +373,95 @@ export function buildGate(dimension, origin, facing, villageId, forwardAt) {
   return golems;
 }
 
+const DEFENCE_TIER_NUMBER = Object.freeze({ palisade: 1, cobble: 2, castle: 3, castle_expand: 3 });
+
+/** The two standing spots just inside one gate's passage, in local f/s. */
+function gateGolemPosts(gate, radius) {
+  const inner = radius - 2;
+  if (gate.edge === "fMax") return [{ f: inner, s: -2 }, { f: inner, s: 2 }];
+  if (gate.edge === "fMin") return [{ f: -inner, s: -2 }, { f: -inner, s: 2 }];
+  if (gate.edge === "sMax") return [{ f: -2, s: inner }, { f: 2, s: inner }];
+  return [{ f: -2, s: -inner }, { f: 2, s: -inner }];
+}
+
+/**
+ * Raises one crossroads defence stage: the old ring comes down, the new wall,
+ * four gatehouses, four corner towers and both road arms go up, and the towers
+ * and gateways are staffed.
+ *
+ * All of it runs as a system.runJob rather than inline. An R94 castle stage is
+ * on the order of 55,000 native block calls; done in one tick that is a
+ * guaranteed watchdog kill, which is the failure walls.js already learned the
+ * hard way (see its clearRingJob). The metadata the caller needs comes from
+ * planDefenceStage(), which is pure - so this can return immediately while the
+ * wall keeps going up over the following seconds.
+ *
+ * The ticking area is held for the whole job and released only once it has
+ * actually drained. Releasing on a fixed timer instead is how the far corners
+ * used to lose their towers: setBlock swallows unloaded-chunk errors, so the
+ * tail of a long build simply no-ops without a single log line.
+ */
+function raiseCrossroadsDefences(elder, state, nextLevel, stageLevel) {
+  const dimension = elder.dimension;
+  const plan = planDefenceStage(stageLevel);
+  const previous = previousDefenceStage(stageLevel);
+  const protectedRects = builtPlotFootprints(nextLevel, state.layoutVersion);
+  const reach = plan.radius + 4;
+  const rect = { fMin: -reach, fMax: reach, sMin: -reach, sMax: reach };
+  const release = holdLoadedArea(dimension, state.origin, state.facing, rect);
+
+  function* stageRunner() {
+    try {
+      if (previous) {
+        yield* clearStageRingJob(dimension, state.origin, state.facing, previous.level, protectedRects);
+      }
+      yield* buildDefenceStageJob(dimension, state.origin, state.facing, stageLevel);
+
+      // Staffing happens inside the job, after the stone is down: a guard
+      // spawned into a tower that does not exist yet falls to the ground.
+      for (const tower of plan.towers) {
+        const at = toWorld(state.origin, state.facing, tower.standAt.f, tower.standAt.s, tower.standAt.up);
+        withRetry(() => spawnTowerGuard(dimension, { x: at.x + 0.5, y: at.y, z: at.z + 0.5 }, state.id, 3));
+        yield;
+      }
+      for (const gate of plan.gates) {
+        // One flag per gate, not one for the whole village: the crossroads has
+        // four gateways and a single shared flag would leave three of them
+        // unguarded forever after the first stage.
+        const key = `village:golemsSpawned:${gate.id}`;
+        if (elder.getDynamicProperty(key)) continue;
+        for (const post of gateGolemPosts(gate, plan.radius)) {
+          const at = toWorld(state.origin, state.facing, post.f, post.s, 0);
+          withRetry(() => spawnGateGolem(dimension, { x: at.x + 0.5, y: at.y, z: at.z + 0.5 }, state.id, 12));
+        }
+        try { elder.setDynamicProperty(key, true); } catch (e) {
+          console.warn("[village] gate golem marker write failed: " + e);
+        }
+        yield;
+      }
+    } catch (error) {
+      console.warn("[village] crossroads defence stage failed: " + error);
+    } finally {
+      release(200);
+    }
+  }
+
+  try {
+    system.runJob(stageRunner());
+  } catch (error) {
+    // No job scheduler (the test emulator, or a very old engine): drain it
+    // here instead. Correct, just not watchdog-safe - which is fine, because
+    // the environments without runJob are also the ones without a watchdog.
+    for (const _ of stageRunner()) { /* drain */ }
+  }
+
+  const tier = DEFENCE_TIER_NUMBER[plan.tier] || 0;
+  try { elder.setDynamicProperty(PROP_TIER, tier); } catch (error) {
+    console.warn("[village] defence tier write failed: " + error);
+  }
+  return { rect: plan.wallBounds, towers: plan.towers, tier, radius: plan.radius, stage: plan.stage };
+}
+
 function tryCityLevelUp(elder, state, nextLevel, cfg, check, options) {
   const buildingId = cfg.cityBuildingId;
   const buildState = getCityBuildState(elder, buildingId);
@@ -413,10 +525,31 @@ function tryCityLevelUp(elder, state, nextLevel, cfg, check, options) {
   } catch (error) {
     console.warn("[village] chapter state update failed: " + error);
   }
+
+  // Level 15 is the only city level that also moves the wall: it pushes the
+  // castle curtain from R78 out to R94, which is what finally brings the
+  // granary yard, the inn, the barracks, the archive and the three isolated
+  // L16-18 buildings inside the wall instead of leaving them stranded outside
+  // it. Failing here must not undo a level that is already committed.
+  let fort = null;
+  const stageLevel = state.layoutVersion === LAYOUT_VERSION_V2 ? defenceStageForLevel(nextLevel) : null;
+  if (stageLevel) {
+    try {
+      fort = raiseCrossroadsDefences(elder, { ...state, level: nextLevel }, nextLevel, stageLevel);
+    } catch (error) {
+      console.warn("[village] city-level defence stage failed: " + error);
+    }
+  }
+
   try { refreshSign(elder); } catch (error) {
     console.warn("[village] sign refresh failed: " + error);
   }
-  return { done: true, leveledUpTo: nextLevel, label: cfg.label, shape, connector, chapterId, cityBuildingId: buildingId };
+  return {
+    done: true, leveledUpTo: nextLevel, label: cfg.label, shape, connector, chapterId,
+    cityBuildingId: buildingId,
+    fortified: fort ? fort.tier : null,
+    towers: fort ? fort.towers.length : 0
+  };
 }
 
 export function tryLevelUp(elder, options) {
@@ -440,12 +573,20 @@ export function tryLevelUp(elder, options) {
   // cfg.pathTo if that reaches further out) - well past what's reliably
   // chunk-loaded around whoever triggered the level-up. Wrap the whole
   // build in one loaded area rather than guessing which sub-step needs it.
-  const loadRadius = Math.max(perimeterFor(fullVillageMaxForward()).fMax, cfg.pathTo || 0) + 10;
+  // On the crossroads this covers the plot only, not the wall: the defence
+  // stage holds its own area over the ring for as long as its job runs (see
+  // raiseCrossroadsDefences). Two overlapping grids of four ticking areas each
+  // would be eight of the engine's ten at once, for ground already covered.
+  const v2Site = state.layoutVersion === LAYOUT_VERSION_V2 ? plotSiteBoundsFor(nextLevel, state.layoutVersion) : null;
+  const loadRadius = v2Site
+    ? Math.max(Math.abs(v2Site.fMin), Math.abs(v2Site.fMax), Math.abs(v2Site.sMin), Math.abs(v2Site.sMax), 16) + 8
+    : Math.max(perimeterFor(fullVillageMaxForward()).fMax, cfg.pathTo || 0) + 10;
   const loadRect = { fMin: -loadRadius, fMax: loadRadius, sMin: -loadRadius, sMax: loadRadius };
 
   let shape = null;
   let chapterId = null;
   let fort = null;
+  const placement = plotPlacementFor(nextLevel, state.layoutVersion) || { plotForward: cfg.plotForward, side: cfg.side };
 
   withLoadedArea(dimension, state.origin, state.facing, loadRect, () => {
     // Level the ground before building. This is done in two tightly scoped
@@ -459,27 +600,35 @@ export function tryLevelUp(elder, options) {
     // and the starter house's near wall (sMax=-6), so it cannot wipe a
     // band out of either wall on an L2/L3 level-up the way a wider pass
     // used to when the road sat closer to those buildings.
-    prepareSite(dimension, state.origin, state.facing,
-      cfg.pathFrom, cfg.pathTo, -2, 2, {
-        padding: 0,
-        clearHeight: 8,
-        fillDepth: 5,
-        surfaceBlock: "minecraft:grass_block"
-      });
+    //
+    // The crossroads gets both its roadways from the defence stage, which
+    // levels its own narrow cells (defences_roads.js#narrowTerrainClearJob),
+    // so pass 1 is a legacy-only step there.
+    if (state.layoutVersion !== LAYOUT_VERSION_V2) {
+      prepareSite(dimension, state.origin, state.facing,
+        cfg.pathFrom, cfg.pathTo, -2, 2, {
+          padding: 0,
+          clearHeight: 8,
+          fillDepth: 5,
+          surfaceBlock: "minecraft:grass_block"
+        });
+    }
 
-    // Pass 2 - this plot only, on this plot's side of the street.
-    const plotSideNear = cfg.side >= 0 ? 2 : -2;
-    const plotSideFar = cfg.side >= 0 ? 14 : -14;
-    prepareSite(dimension, state.origin, state.facing,
-      cfg.plotForward - 2, cfg.plotForward + 9,
-      Math.min(plotSideNear, plotSideFar), Math.max(plotSideNear, plotSideFar), {
-        padding: 0,
-        clearHeight: 12,
-        fillDepth: 6,
-        surfaceBlock: "minecraft:grass_block"
-      });
+    // Pass 2 - this plot only. The rectangle is the same one
+    // builtPlotFootprints() later defends, so the ground that gets levelled
+    // and the ground that is protected can never drift apart.
+    const site = plotSiteBoundsFor(nextLevel, state.layoutVersion);
+    if (site) {
+      prepareSite(dimension, state.origin, state.facing,
+        site.fMin, site.fMax, site.sMin, site.sMax, {
+          padding: 0,
+          clearHeight: 12,
+          fillDepth: 6,
+          surfaceBlock: "minecraft:grass_block"
+        });
+    }
 
-    shape = runLevelBuild(dimension, state.origin, state.facing, nextLevel, state.palette);
+    shape = runLevelBuild(dimension, state.origin, state.facing, nextLevel, state.palette, state.layoutVersion);
     elder.setDynamicProperty(PROP_LEVEL, nextLevel);
     // State is committed only after the regular level value is written. It is
     // deliberately fail-safe: level construction remains authoritative.
@@ -508,8 +657,8 @@ export function tryLevelUp(elder, options) {
           cfg.npc.professionName, state.id, homeRadius);
         // The plot reference makes a quest upgrade deterministic even when
         // several villages and professions are loaded in the same world.
-        npc.setDynamicProperty("village:plotForward", cfg.plotForward);
-        npc.setDynamicProperty("village:plotSide", cfg.side);
+        npc.setDynamicProperty("village:plotForward", placement.plotForward);
+        npc.setDynamicProperty("village:plotSide", placement.side);
         // Workers (farmer, miner) run the production loop; pure traders don't
         if (cfg.npc.worker) npc.addTag("village_worker");
         return npc;
@@ -522,10 +671,13 @@ export function tryLevelUp(elder, options) {
 
     // Fortification upgrade: replaces whatever wall tier was there before,
     // raises the new one and staffs the towers.
-    if (cfg.fortify) {
+    if (state.layoutVersion === LAYOUT_VERSION_V2) {
+      const stageLevel = defenceStageForLevel(nextLevel);
+      if (stageLevel) fort = raiseCrossroadsDefences(elder, state, nextLevel, stageLevel);
+    } else if (cfg.fortify) {
       try {
         fort = buildFortifications(dimension, state.origin, state.facing,
-          fullVillageMaxForward(), cfg.fortify, builtPlotFootprints(nextLevel));
+          fullVillageMaxForward(), cfg.fortify, builtPlotFootprints(nextLevel, state.layoutVersion));
         elder.setDynamicProperty(PROP_TIER, cfg.fortify);
 
         // Station a guard in each tower's guard post. The wall ring can sit
@@ -570,7 +722,7 @@ export function tryLevelUp(elder, options) {
     label: cfg.label,
     shape,
     chapterId,
-    fortified: cfg.fortify || null,
+    fortified: (state.layoutVersion === LAYOUT_VERSION_V2 ? fort?.tier : cfg.fortify) || null,
     towers: fort ? fort.towers.length : 0
   };
 }

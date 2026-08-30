@@ -100,24 +100,41 @@ for (const b of builtShapes) {
 }
 assert(foundJobSites >= 3, `craftsman houses contain their job-site blocks (${foundJobSites})`);
 
-// The street is a single through-road, growing east for plots at positive
-// plotForward and west (behind the town hall) for plots at negative
-// plotForward - see extendPath()'s doc comment in builder.js. Levels 4-7
-// build behind the town hall, so the paved road must reach all the way
-// out to their plots too, not just stop at the town hall's front door.
+// The street is a crossroads, not a single through-road: two three-wide arms
+// crossing at the town hall, each running out to a gate in the wall. Both
+// centrelines are cobblestone and their verges gravel (paveCrossroadsArms in
+// builder.js lays the near stretches as the village grows, the defence stage
+// lays the rest out to the gates - deliberately the same two materials, so
+// the join does not show).
+//
+// This runs at level 10, so the castle wall stands at R78 and both arms
+// should be continuous the whole way to it. Nothing may be paved *through* a
+// building either, which is what the plot-overlap check above would miss: a
+// road arm cutting a house in half leaves both footprints intact.
+const ROAD_SURFACES = new Set(["minecraft:cobblestone", "minecraft:gravel"]);
 let missingRoad = 0;
-for (let f = 1; f <= 38; f++) {
-  const p = toWorld(origin, facing, f, 0, -1);
-  if (blockAt(elder.dimension, p.x, p.y, p.z) !== "minecraft:gravel") missingRoad++;
+for (let position = -78; position <= 78; position++) {
+  for (let offset = -1; offset <= 1; offset++) {
+    for (const [f, s] of [[position, offset], [offset, position]]) {
+      const p = toWorld(origin, facing, f, s, -1);
+      if (!ROAD_SURFACES.has(blockAt(elder.dimension, p.x, p.y, p.z))) missingRoad++;
+    }
+  }
 }
-// Skip -10..-3: that span is the founding campfire's own courtyard
-// (cobblestone with a small gravel firepit patch), not part of the paved
-// road proper - see buildCampfire().
-for (let f = -26; f <= -11; f++) {
-  const p = toWorld(origin, facing, f, 0, -1);
-  if (blockAt(elder.dimension, p.x, p.y, p.z) !== "minecraft:gravel") missingRoad++;
+assert(missingRoad === 0, `both crossroads arms are paved continuously out to the wall (${missingRoad} gap(s))`);
+
+// The arms must stay clear overhead too - a house standing in the roadway
+// would show up here rather than in the footprint checks above.
+let blockedRoad = 0;
+for (let position = -78; position <= 78; position++) {
+  for (const [f, s] of [[position, 0], [0, position]]) {
+    for (let up = 0; up <= 2; up++) {
+      const p = toWorld(origin, facing, f, s, up);
+      if (blockAt(elder.dimension, p.x, p.y, p.z) !== "minecraft:air") blockedRoad++;
+    }
+  }
 }
-assert(missingRoad === 0, `the through-road is paved continuously on both sides of the town hall (${missingRoad} gap(s))`);
+assert(blockedRoad === 0, `nothing stands in either roadway (${blockedRoad} blocked cell(s))`);
 
 console.log(failures === 0 ? "\nALL INTEGRATION TESTS PASSED" : `\n${failures} INTEGRATION TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

@@ -5,12 +5,15 @@ import {
   buildMinerHouse,
   buildPlainHouse,
   extendPath,
+  paveCrossroadsArms,
+  placeRoadLamps,
   ROAD_HALF_WIDTH
 } from "./builder.js";
 import { TIER_PALISADE, TIER_COBBLE, TIER_CASTLE } from "./walls.js";
 import { buildCityBuilding } from "./city_buildings_11_15.js";
 import { specialFootprintsUpTo } from "./specials.js";
 import { farmerYardFootprint } from "./upgrades.js";
+import { boundsFor, FINAL_RADIUS, PERIMETER_SCHEDULE, ROAD_AXES, SPATIAL_PLAN, scheduleForLevel } from "./spatial_plan.js";
 
 /**
  * Level 1 (town hall + campfire + first house) is built at founding and
@@ -160,9 +163,102 @@ export const LEVELS = {
     label: "Деревенский архив",
     requirements: { "minecraft:paper": 48, "minecraft:bookshelf": 16, "minecraft:dark_oak_planks": 64 },
     cityBuildingId: "village_archive",
-    npc: null
+    npc: null,
+    // The last perimeter stage in PERIMETER_SCHEDULE: the castle wall is not
+    // replaced by a fourth tier here, it is pushed out from R78 to R94 so the
+    // L12-L18 plots (granary yard, inn, barracks, archive, and the three
+    // isolated L16-18 buildings, all of them out at +/-66) end up inside the
+    // wall instead of outside it. Crossroads layout only - a legacy village
+    // never reaches this level.
+    defenceStage: 15,
+    guards: true
   }
 };
+
+export const LAYOUT_V2 = 2;
+
+/** Half-width of a crossroads road arm: three blocks wide, so side -1..1. */
+export const CROSSROADS_ROAD_HALF_WIDTH = Math.floor(ROAD_AXES.forward.width / 2);
+
+/** Outermost radius the crossroads wall ever reaches (PERIMETER_SCHEDULE's last stage). */
+const FINAL_VILLAGE_RADIUS = FINAL_RADIUS;
+
+/** Radius of the first wall stage, used as a stand-in before any wall exists. */
+const PERIMETER_SCHEDULE_FIRST_RADIUS = PERIMETER_SCHEDULE[0].radius;
+
+/**
+ * level -> canonical buildingId, straight off SPATIAL_PLAN. Deriving it keeps
+ * spatial_plan.js the only place a level's plot identity is written down.
+ */
+const PLANNED_BUILDING_BY_LEVEL = Object.freeze(SPATIAL_PLAN.reduce((map, entry) => {
+  // Level 1 has three entries; the numbered levels have exactly one each and
+  // those are the only ones this map is asked about.
+  if (entry.level > 1 && !map[entry.level]) map[entry.level] = entry.buildingId;
+  return map;
+}, {}));
+
+/**
+ * Plot anchors for the crossroads layout, one per numbered level.
+ *
+ * The legacy layout strings every house along a single forward street, which
+ * is why the ground either side of it is empty: two of the four quadrants
+ * inside the wall are never used at all. These anchors put the same houses on
+ * the plots `spatial_plan.js` already reserves for them, spread over all four
+ * quadrants of the crossroads.
+ *
+ * Each value is the pair houseShell() takes: `plotForward` is the near edge
+ * along the street axis (the house runs plotForward..plotForward+6, +/-1 more
+ * for the roof overhang) and `side` is the plot centre across it (the house
+ * runs side-3..side+3, again +/-1 for the overhang). Both roads are three
+ * blocks wide - the forward road owns side -1..1 and the side road owns
+ * forward -1..1 - so every anchor here keeps its building's outermost block,
+ * eaves included, at least two away from both centrelines.
+ *
+ * Do not hand-check these against the diagram in the plan: the test asserts
+ * each built footprint really does sit inside its own `SPATIAL_PLAN` envelope
+ * and really does clear both road bands, which is the only version of that
+ * check that cannot rot.
+ */
+const V2_PLOTS = Object.freeze({
+  2: Object.freeze({ plotForward: 14, side: -10 }),   // farmer_homestead
+  3: Object.freeze({ plotForward: 14, side: 10 }),    // blacksmith_forge
+  4: Object.freeze({ plotForward: -13, side: -10 }),  // cartographer_house
+  5: Object.freeze({ plotForward: -14, side: 27 }),   // palisade ward house
+  6: Object.freeze({ plotForward: -26, side: 12 }),   // miner_house
+  7: Object.freeze({ plotForward: -26, side: -10 }),  // resident_house
+  8: Object.freeze({ plotForward: 25, side: -10 }),   // cobble ward house
+  9: Object.freeze({ plotForward: 26, side: 10 }),    // artisan_house
+  // 36, not 37: at 37 the house's roof overhang would reach forward 44,
+  // which is exactly where the R44 palisade still stands when this level
+  // builds. The level raises R78 and clears R44 a moment later, but the house
+  // goes up first, so the two would occupy the same blocks. Keeping the plot
+  // one back makes the collision impossible rather than order-dependent.
+  10: Object.freeze({ plotForward: 36, side: -10 })   // castle ward house
+});
+
+/** The three level-1 buildings, on the same crossroads plots. */
+export const V2_FOUNDING = Object.freeze({
+  townHall: Object.freeze({ plotForward: 3, side: 7 }),
+  starterHouse: Object.freeze({ plotForward: 3, side: -6 }),
+  campfire: Object.freeze({ plotForward: -6, side: 5 })
+});
+
+/** Anchor a level's house is built from, for the village's layout version. */
+export function plotPlacementFor(level, layoutVersion) {
+  const cfg = LEVELS[level];
+  if (!cfg || cfg.cityBuildingId) return null;
+  if (layoutVersion === LAYOUT_V2 && V2_PLOTS[level]) return { ...V2_PLOTS[level] };
+  if (!Number.isInteger(cfg.plotForward)) return null;
+  return { plotForward: cfg.plotForward, side: cfg.side };
+}
+
+/** The defence stage this level raises, or null if it raises none. */
+export function defenceStageForLevel(level) {
+  const cfg = LEVELS[level];
+  if (!cfg) return null;
+  if (Number.isInteger(cfg.defenceStage)) return cfg.defenceStage;
+  return cfg.fortify ? level : null;
+}
 
 // Existing UI/chapter modules still use this legacy-safe static cap until the
 // parallel economy/UI change set merges. Village runtime uses the layout-aware
@@ -204,15 +300,52 @@ export function fullVillageMaxForward() {
   return maxForwardForLevel(MAX_BETA_LEVEL);
 }
 
-export function runLevelBuild(dimension, origin, facing, level, paletteId) {
+export function runLevelBuild(dimension, origin, facing, level, paletteId, layoutVersion) {
   const cfg = LEVELS[level];
   if (!cfg) return null;
   if (cfg.cityBuildingId) return buildCityBuilding(cfg.cityBuildingId, dimension, origin, facing);
+  const placement = plotPlacementFor(level, layoutVersion);
+  if (!placement) return null;
   // Protect every plot built up to and including this level (this level's
   // own footprint is included so the lattice can't collide with the house
   // about to go up right after it) from the lamp-post lattice.
-  extendPath(dimension, origin, facing, cfg.pathFrom, cfg.pathTo, builtPlotFootprints(level));
-  return cfg.build(dimension, origin, facing, cfg.plotForward, cfg.side, paletteId);
+  const protectedRects = builtPlotFootprints(level, layoutVersion);
+  if (layoutVersion === LAYOUT_V2) {
+    // The defence stage paves both arms all the way to the gates, but the
+    // first wall is level 5 - so up to then the level-up lays the street
+    // itself, out as far as it has actually built.
+    layCrossroadsTo(dimension, origin, facing, level, protectedRects);
+  } else {
+    extendPath(dimension, origin, facing, cfg.pathFrom, cfg.pathTo, protectedRects);
+  }
+  return cfg.build(dimension, origin, facing, placement.plotForward, placement.side, paletteId);
+}
+
+/**
+ * How far out along each crossroads arm the village has actually built. The
+ * lamp lattice follows this rather than the wall radius, so a level-1 village
+ * is not ringed by ninety blocks of lit but empty road.
+ */
+function crossroadsLitReach(level) {
+  let reach = 12;
+  for (let l = 2; l <= level; l++) {
+    const placement = V2_PLOTS[l];
+    if (!placement) continue;
+    reach = Math.max(reach, Math.abs(placement.plotForward) + 8, Math.abs(placement.side) + 5);
+  }
+  return reach;
+}
+
+function layCrossroadsTo(dimension, origin, facing, level, protectedRects) {
+  const reach = crossroadsLitReach(level);
+  paveCrossroadsArms(dimension, origin, facing, reach, CROSSROADS_ROAD_HALF_WIDTH);
+  // The crossroads roads are three blocks wide (side -1..1), so the posts
+  // stand at +/-2 - one block closer than the legacy five-wide street's.
+  const options = { halfWidth: CROSSROADS_ROAD_HALF_WIDTH + 1 };
+  for (const axis of ["forward", "side"]) {
+    placeRoadLamps(dimension, origin, facing, axis, 0, reach, protectedRects, options);
+    placeRoadLamps(dimension, origin, facing, axis, 0, -reach, protectedRects, options);
+  }
 }
 
 export function isCityLevel(level) {
@@ -233,9 +366,31 @@ const DOWNTOWN_FOOTPRINT = { fMin: -8, fMax: 10, sMin: -13, sMax: 14 };
  * marks protected is provably the same ground the level's own house
  * building already claimed - never more, never less.
  */
-function plotFootprint(level) {
+function plotFootprint(level, layoutVersion) {
   const cfg = LEVELS[level];
-  if (!cfg || cfg.cityBuildingId || !Number.isInteger(cfg.plotForward)) return null;
+  if (!cfg || cfg.cityBuildingId) return null;
+  if (layoutVersion === LAYOUT_V2) {
+    // On the crossroads the reserved envelope in spatial_plan.js is already
+    // the authority on what ground a level owns, and it is deliberately more
+    // generous than the house itself. Reusing it means the protection
+    // rectangle can never drift away from the plot it is meant to protect -
+    // there is only one number for both.
+    const buildingId = PLANNED_BUILDING_BY_LEVEL[level];
+    const planned = buildingId ? boundsFor(buildingId) : null;
+    if (planned) {
+      const rect = { ...planned.bounds };
+      if (cfg.npc?.professionName === "Фермер") {
+        const placement = plotPlacementFor(level, layoutVersion);
+        const yard = farmerYardFootprint(placement.plotForward, placement.side);
+        rect.fMin = Math.min(rect.fMin, yard.fMin);
+        rect.fMax = Math.max(rect.fMax, yard.fMax);
+        rect.sMin = Math.min(rect.sMin, yard.sMin);
+        rect.sMax = Math.max(rect.sMax, yard.sMax);
+      }
+      return rect;
+    }
+  }
+  if (!Number.isInteger(cfg.plotForward)) return null;
   const plotSideNear = cfg.side >= 0 ? 2 : -2;
   const plotSideFar = cfg.side >= 0 ? 14 : -14;
   const rect = {
@@ -277,16 +432,67 @@ function roadCorridor() {
 }
 
 /**
+ * The three canonical level-1 envelopes on the crossroads. Unlike the legacy
+ * DOWNTOWN_FOOTPRINT - one padded box covering hall, campfire and starter
+ * house together, which only worked because all three sat in a huddle beside
+ * one street - these are three separate plots in two different quadrants, so
+ * a single bounding box round them would swallow the crossroads itself.
+ */
+const V2_DOWNTOWN_FOOTPRINTS = Object.freeze(
+  ["town_hall", "campfire", "starter_house"]
+    .map((buildingId) => boundsFor(buildingId)?.bounds)
+    .filter(Boolean)
+    .map((bounds) => Object.freeze(bounds))
+);
+
+/** Both crossroads arms, as protection rectangles for the lamp lattice. */
+function crossroadsCorridors() {
+  const half = CROSSROADS_ROAD_HALF_WIDTH;
+  const reach = FINAL_VILLAGE_RADIUS;
+  return [
+    { fMin: -reach, fMax: reach, sMin: -half, sMax: half },
+    { fMin: -half, fMax: half, sMin: -reach, sMax: reach }
+  ];
+}
+
+/**
+ * The wall radius a village of this level actually has. On the crossroads it
+ * comes from PERIMETER_SCHEDULE (R44 -> R62 -> R78 -> R94); on the legacy
+ * layout it is the single R48 square walls.js has always built. Anything that
+ * needs to know where the wall is - the gate notice board, the area a build
+ * has to keep loaded - must ask this rather than assume one of the two.
+ */
+export function villageRadiusFor(level, layoutVersion) {
+  if (layoutVersion === LAYOUT_V2) {
+    const stage = scheduleForLevel(level);
+    return stage ? stage.radius : PERIMETER_SCHEDULE_FIRST_RADIUS;
+  }
+  return Math.max(30, fullVillageMaxForward() + 10);
+}
+
+/**
+ * The ground one level's build owns, and therefore the ground its level-up
+ * should flatten before building on it. Same rectangle builtPlotFootprints()
+ * protects, so the ground that gets levelled and the ground that is defended
+ * from later sweeps can never be two different rectangles.
+ */
+export function plotSiteBoundsFor(level, layoutVersion) {
+  return plotFootprint(level, layoutVersion);
+}
+
+/**
  * Every plot footprint built up to and including `uptoLevel`, plus the
  * town hall/first house/campfire area and the street itself. Used to keep
  * the fortification interior-terrain sweep from ever touching ground a
  * house (or the road) already occupies (see terrain.js's
  * interiorFlattenJob).
  */
-export function builtPlotFootprints(uptoLevel) {
-  const rects = [DOWNTOWN_FOOTPRINT, roadCorridor()];
+export function builtPlotFootprints(uptoLevel, layoutVersion) {
+  const rects = layoutVersion === LAYOUT_V2
+    ? [...V2_DOWNTOWN_FOOTPRINTS, ...crossroadsCorridors()]
+    : [DOWNTOWN_FOOTPRINT, roadCorridor()];
   for (let level = 2; level <= uptoLevel; level++) {
-    const rect = plotFootprint(level);
+    const rect = plotFootprint(level, layoutVersion);
     if (rect) rects.push(rect);
   }
   // Special buildings now stand inside the wall alongside the houses, so
@@ -295,6 +501,6 @@ export function builtPlotFootprints(uptoLevel) {
   // the next wall tier. Each plot joins the list only once its building can
   // exist (see SPECIAL_BUILDINGS' unlockLevel), so earlier tiers still
   // flatten that ground with the rest of the village.
-  rects.push(...specialFootprintsUpTo(uptoLevel));
+  rects.push(...specialFootprintsUpTo(uptoLevel, layoutVersion));
   return rects;
 }

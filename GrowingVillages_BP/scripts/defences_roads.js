@@ -235,49 +235,68 @@ function innerCell(cell, radius) {
   };
 }
 
-function narrowTerrainClear(placer, cells, maxUp, foundation) {
+/**
+ * How much work one slice of a defence job does before handing the tick back.
+ * Sized so each slice stays around five hundred native block calls - the same
+ * order as walls.js's own ring job, and well under the watchdog's spike
+ * threshold on a phone. An R94 castle stage is roughly 55,000 block calls in
+ * total; done in one synchronous pass it is a guaranteed watchdog kill, which
+ * is why every writer below is a generator rather than a loop.
+ */
+const TERRAIN_SLICE = 40;   // ~14 calls per cell
+const ROAD_SLICE = 100;     // 5 calls per cell
+const CURTAIN_SLICE = 30;   // ~18 calls per cell
+
+function dedupeCells(cells) {
   const seen = new Set();
+  const out = [];
   for (const cell of cells) {
     const key = `${cell.f},${cell.s}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    placer.block(cell.f, cell.s, -1, foundation);
-    for (let up = 0; up <= maxUp; up++) placer.block(cell.f, cell.s, up, "minecraft:air");
+    out.push({ f: cell.f, s: cell.s });
   }
-  return freezeCells([...seen].map((key) => {
-    const [f, s] = key.split(",").map(Number);
-    return { f, s };
-  }));
+  return freezeCells(out);
 }
 
-function buildRoadCells(placer, cells) {
+function* narrowTerrainClearJob(placer, cells, maxUp, foundation) {
+  let done = 0;
+  for (const cell of cells) {
+    placer.block(cell.f, cell.s, -1, foundation);
+    for (let up = 0; up <= maxUp; up++) placer.block(cell.f, cell.s, up, "minecraft:air");
+    if (++done % TERRAIN_SLICE === 0) yield;
+  }
+}
+
+function* roadCellsJob(placer, cells) {
+  let done = 0;
   for (const cell of cells) {
     const centre = cell.f === 0 || cell.s === 0;
     placer.block(cell.f, cell.s, -1, centre ? "minecraft:cobblestone" : "minecraft:gravel");
     for (let up = 0; up <= 3; up++) placer.block(cell.f, cell.s, up, "minecraft:air");
+    if (++done % ROAD_SLICE === 0) yield;
   }
 }
 
-/** Builds a bounded, 3-wide local road segment. No lamp posts are added inside the roadway. */
-function buildRoadArm(dimension, origin, facing, axis, from, to) {
+/** Pure description of one bounded, 3-wide road arm. No world access. */
+function roadArmPlan(axis, from, to) {
   if (axis !== "forward" && axis !== "side") throw new Error(`unsupported road axis: ${axis}`);
   if (!Number.isInteger(from) || !Number.isInteger(to)) throw new Error("road endpoints must be integers");
   const min = Math.min(from, to), max = Math.max(from, to);
   const half = Math.floor((axis === "forward" ? ROAD_AXES.forward.width : ROAD_AXES.side.width) / 2);
-  const placer = makePlacer(dimension, origin, facing);
   const cells = [];
   for (let position = min; position <= max; position++) {
     for (let offset = -half; offset <= half; offset++) {
       cells.push(axis === "forward" ? { f: position, s: offset, axis } : { f: offset, s: position, axis });
     }
   }
-  buildRoadCells(placer, cells);
   return Object.freeze({ axis, from: min, to: max, width: half * 2 + 1, bounds: Object.freeze(localBoundsFromCells(cells)), cells: freezeCells(cells) });
 }
 
-function buildCurtain(placer, stage) {
+function* curtainJob(placer, stage) {
   const style = styleFor(stage.tier);
   const cells = wallCellsForStage(stage);
+  let done = 0;
   for (const cell of cells) {
     placer.box(cell.f, cell.s, 0, cell.f, cell.s, style.height - 1, style.wall);
     if (style.family === "palisade") {
@@ -301,8 +320,8 @@ function buildCurtain(placer, stage) {
     } else if ((cell.f + cell.s) % 3 === 0) {
       placer.block(inner.f, inner.s, style.height - 1, "minecraft:oak_planks");
     }
+    if (++done % CURTAIN_SLICE === 0) yield;
   }
-  return cells;
 }
 
 function buildTower(placer, footprint, stage) {
@@ -339,6 +358,21 @@ function buildTower(placer, footprint, stage) {
   placer.block(Math.round((fMin + fMax) / 2), Math.round((sMin + sMax) / 2), top + 1, "minecraft:lantern", { hanging: false });
 }
 
+/**
+ * Where a watchman can stand inside a finished tower: the open interior, one
+ * block above its floor. Derived from the same footprint the tower is built
+ * from, so it can never drift out of the tower the way a second hardcoded
+ * coordinate would.
+ */
+export function towerStandLocalFor(footprint) {
+  const { fMin, fMax, sMin, sMax } = footprint.bounds;
+  return Object.freeze({
+    f: Math.round((fMin + fMax) / 2),
+    s: Math.round((sMin + sMax) / 2),
+    up: 1
+  });
+}
+
 function gatePierCells(gate) {
   const values = [-3, 3];
   return values.map((offset) => gate.edge === "fMax" || gate.edge === "fMin"
@@ -368,7 +402,6 @@ function buildGatehouse(placer, gate, stage) {
     }
     for (let up = 0; up <= 3; up++) placer.block(cell.f, cell.s, up, "minecraft:air");
   }
-  return freezeCells([...gate.cells, ...piers]);
 }
 
 function stageTerrainCells(stage) {
@@ -401,44 +434,138 @@ function ensureActiveAllocationsClear(stage) {
   }
 }
 
+/** The stage a village had before `stageOrLevel`, or null if this is its first wall. */
+export function previousDefenceStage(stageOrLevel) {
+  const stage = stageFor(stageOrLevel);
+  const index = PERIMETER_SCHEDULE.findIndex((entry) => entry.level === stage.level);
+  return index > 0 ? { ...PERIMETER_SCHEDULE[index - 1] } : null;
+}
+
+function insideAnyRect(f, s, rects) {
+  return !!rects && rects.some((rect) => f >= rect.fMin && f <= rect.fMax && s >= rect.sMin && s <= rect.sMax);
+}
+
 /**
- * Builds one detached defensive stage. It only clears/levels the exact wall,
- * tower, gate and road cells returned in metadata; it never scans city interior.
+ * Takes the previous wall ring down so a new stage replaces it instead of
+ * standing inside it.
+ *
+ * Without this each stage would leave the last one in place and a level-15
+ * village would end up with four concentric walls, the inner three cutting
+ * straight through its own quarters. Cells inside `protectedRects` (the
+ * built plots from levels.js#builtPlotFootprints) are left alone, so a
+ * building that has legitimately grown up against the old line does not lose
+ * a slice of itself to the demolition.
  */
-export function buildDefenceStage(dimension, origin, facing, stageOrLevel) {
+export function* clearStageRingJob(dimension, origin, facing, stageOrLevel, protectedRects) {
   const stage = stageFor(stageOrLevel);
   const style = styleFor(stage.tier);
-  ensureActiveAllocationsClear(stage);
   const placer = makePlacer(dimension, origin, facing);
-  const wallBounds = perimeterForRadius(stage.radius);
-  const terrainCells = stageTerrainCells(stage);
-  const terrainBounds = narrowTerrainClear(placer, terrainCells, style.towerHeight + 2, style.foundation);
+  const height = style.towerHeight + 3;
+  const positions = [...wallCellsForStage(stage), ...gateOpeningCells(stage).flatMap((gate) => [...gate.cells, ...gatePierCells(gate)])];
+  let done = 0;
+  for (const pos of positions) {
+    // A band either side of the ring line, so walkways, parapets and the
+    // gatehouse piers go with it rather than being left floating.
+    for (let d = -2; d <= 2; d++) {
+      const edge = pos.edge || edgeFor(pos.f, pos.s, stage.radius);
+      const f = edge === "sMin" || edge === "sMax" ? pos.f : pos.f + d;
+      const s = edge === "sMin" || edge === "sMax" ? pos.s + d : pos.s;
+      if (insideAnyRect(f, s, protectedRects)) continue;
+      for (let up = 0; up <= height; up++) placer.block(f, s, up, "minecraft:air");
+    }
+    if (++done % CURTAIN_SLICE === 0) yield;
+  }
+  for (const tower of towerFootprintsForStage(stage)) {
+    for (let f = tower.bounds.fMin; f <= tower.bounds.fMax; f++) {
+      for (let s = tower.bounds.sMin; s <= tower.bounds.sMax; s++) {
+        if (insideAnyRect(f, s, protectedRects)) continue;
+        for (let up = 0; up <= height; up++) placer.block(f, s, up, "minecraft:air");
+      }
+    }
+    yield;
+  }
+}
 
-  const forwardRoad = buildRoadArm(dimension, origin, facing, "forward", -stage.radius, stage.radius);
-  const sideRoad = buildRoadArm(dimension, origin, facing, "side", -stage.radius, stage.radius);
-  const wall = buildCurtain(placer, stage);
+/**
+ * Everything a caller needs to know about a defence stage, computed without a
+ * single world write: gates, towers, road arms, wall bounds and the exact
+ * cells the build will touch.
+ *
+ * Splitting this out is what lets the build itself be a background job. A
+ * generator cannot hand its return value to system.runJob, so the metadata
+ * has to exist before the first block is placed - and all of it is a pure
+ * function of the stage anyway.
+ */
+export function planDefenceStage(stageOrLevel) {
+  const stage = stageFor(stageOrLevel);
+  const style = styleFor(stage.tier);
   const gates = gateOpeningCells(stage);
-  const gateTerrain = [];
-  for (const gate of gates) gateTerrain.push(...buildGatehouse(placer, gate, stage));
   const towers = towerFootprintsForStage(stage);
-  for (const tower of towers) buildTower(placer, tower, stage);
-
+  const forwardRoad = roadArmPlan("forward", -stage.radius, stage.radius);
+  const sideRoad = roadArmPlan("side", -stage.radius, stage.radius);
   return Object.freeze({
     stage: stage.level,
     tier: stage.tier,
     radius: stage.radius,
     paletteFamily: style.family,
     gates: Object.freeze(gates.map((gate) => Object.freeze({ ...gate }))),
-    towers: Object.freeze(towers.map((tower) => Object.freeze({ id: tower.id, corner: { ...tower.corner }, bounds: cloneBounds(tower.bounds) }))),
-    wallBounds: Object.freeze(cloneBounds(wallBounds)),
+    towers: Object.freeze(towers.map((tower) => Object.freeze({
+      id: tower.id,
+      corner: { ...tower.corner },
+      bounds: cloneBounds(tower.bounds),
+      standAt: towerStandLocalFor(tower)
+    }))),
+    wallBounds: Object.freeze(cloneBounds(perimeterForRadius(stage.radius))),
     roadArms: Object.freeze([forwardRoad, sideRoad]),
     placedBounds: Object.freeze({
-      curtainCells: wall,
-      gatehouseCells: freezeCells(gateTerrain),
+      curtainCells: wallCellsForStage(stage),
+      gatehouseCells: freezeCells(gates.flatMap((gate) => [...gate.cells, ...gatePierCells(gate)])),
       towerFootprints: Object.freeze(towers.map((tower) => Object.freeze(cloneBounds(tower.bounds)))),
       roadBounds: Object.freeze([cloneBounds(forwardRoad.bounds), cloneBounds(sideRoad.bounds)])
     }),
-    terrainBounds: terrainBounds
+    terrainBounds: dedupeCells(stageTerrainCells(stage))
   });
 }
 
+/**
+ * The block-placing half of one defence stage, as a generator so it can run
+ * under system.runJob and hand the tick back regularly. Order matters: ground
+ * is cleared first, then roads, then the curtain, gatehouses and towers, so a
+ * half-finished stage always looks like a wall still going up rather than a
+ * wall with holes punched through it.
+ */
+export function* buildDefenceStageJob(dimension, origin, facing, stageOrLevel) {
+  const stage = stageFor(stageOrLevel);
+  const style = styleFor(stage.tier);
+  ensureActiveAllocationsClear(stage);
+  const placer = makePlacer(dimension, origin, facing);
+
+  yield* narrowTerrainClearJob(placer, dedupeCells(stageTerrainCells(stage)), style.towerHeight + 2, style.foundation);
+  yield* roadCellsJob(placer, roadArmPlan("forward", -stage.radius, stage.radius).cells);
+  yield* roadCellsJob(placer, roadArmPlan("side", -stage.radius, stage.radius).cells);
+  yield* curtainJob(placer, stage);
+  for (const gate of gateOpeningCells(stage)) {
+    buildGatehouse(placer, gate, stage);
+    yield;
+  }
+  for (const tower of towerFootprintsForStage(stage)) {
+    buildTower(placer, tower, stage);
+    yield;
+  }
+}
+
+/**
+ * Builds one detached defensive stage synchronously. It only clears/levels the
+ * exact wall, tower, gate and road cells returned in metadata; it never scans
+ * city interior.
+ *
+ * Callers running inside the game should use planDefenceStage() plus
+ * system.runJob(buildDefenceStageJob(...)) instead - at R94 this drains around
+ * 55,000 block calls, far past what one tick can absorb. This synchronous form
+ * stays for tests and for small radii.
+ */
+export function buildDefenceStage(dimension, origin, facing, stageOrLevel) {
+  const plan = planDefenceStage(stageOrLevel);
+  for (const _ of buildDefenceStageJob(dimension, origin, facing, stageOrLevel)) { /* drain */ }
+  return plan;
+}

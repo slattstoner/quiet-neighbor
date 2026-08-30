@@ -135,7 +135,11 @@ console.log("\n=== golems spawn once, not once per fortify tier ===");
 
   const vTag = "village:" + state0.id;
   const golems = elder.dimension.getEntities({ tags: ["village_golem", vTag] });
-  assert(golems.length === 2, `exactly one golem pair exists after all three fortify tiers (${golems.length})`);
+  // The crossroads has four gateways, so a fully walled village posts four
+  // pairs. The point of the test is unchanged: raising a later wall tier must
+  // not stack a second pair on top of an existing one, so the count has to be
+  // exactly one pair per gate after all three tiers, not more.
+  assert(golems.length === 8, `exactly one golem pair per gate after all three fortify tiers (${golems.length})`);
 }
 
 console.log("\n=== flower pots use a real Bedrock block id ===");

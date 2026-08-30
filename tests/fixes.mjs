@@ -1,7 +1,7 @@
 import { __test__, system, world } from "@minecraft/server";
 import { foundVillage, chestSatisfiesRequirements, tryLevelUp, buildGate, GATE_LEVEL, getVillageState } from "./scripts/village.js";
 import { toWorld } from "./scripts/util.js";
-import { LEVELS, MAX_BETA_LEVEL } from "./scripts/levels.js";
+import { LEVELS, MAX_BETA_LEVEL, V2_FOUNDING } from "./scripts/levels.js";
 import { buildPlainHouse, buildFarmerHouse, buildBlacksmithHouse, buildCartographerHouse, buildTownHall } from "./scripts/builder.js";
 import { startTetherLoop, getHome } from "./scripts/npc.js";
 
@@ -236,20 +236,29 @@ console.log("\n=== progression + professions ===");
   const elder = foundVillage(player, origin, 0);
   const state = getVillageState(elder);
 
-  // Town hall geometry from buildTownHall's houseShell(0, 9, 9, 9, 6, ...):
-  // f1=0, f2=8, sMin=5, sMax=13, height=6. Sample the near wall (sMin=5),
-  // avoiding the door bay (doorForward=4) and its lantern post.
+  // Town hall geometry, derived from the plot the hall is actually built on
+  // rather than written out again here: houseShell(plotForward, side, 9, 9, 6)
+  // gives f1=plotForward, f2=f1+8, sMin=side-4, sMax=side+4, height=6. The
+  // literals this used to carry (f1=0, sMin=5) only held while the hall was
+  // nailed to forward 0 / side 9, and silently became a test of empty air the
+  // moment it moved onto its crossroads plot.
+  const hall = V2_FOUNDING.townHall;
+  const hallF1 = hall.plotForward;
+  const hallSMin = hall.side - 4;
+  const hallSMax = hall.side + 4;
+  // Sample the near wall, avoiding the door bay (doorForward = f1+4) and its
+  // lantern post.
   const nearWallSamples = [
-    { f: 0, up: 3, expect: "minecraft:stripped_dark_oak_log", label: "sMin corner post" },
-    { f: 8, up: 3, expect: "minecraft:stripped_dark_oak_log", label: "sMax-side corner post at f2" },
-    { f: 2, up: 3, expect: "minecraft:dark_oak_planks", label: "near-wall plank" },
-    { f: 6, up: 3, expect: "minecraft:dark_oak_planks", label: "near-wall plank" },
-    { f: 2, up: 0, expect: "minecraft:stone_bricks", label: "near-wall foundation trim" }
+    { f: hallF1, up: 3, expect: "minecraft:stripped_dark_oak_log", label: "sMin corner post" },
+    { f: hallF1 + 8, up: 3, expect: "minecraft:stripped_dark_oak_log", label: "sMax-side corner post at f2" },
+    { f: hallF1 + 2, up: 3, expect: "minecraft:dark_oak_planks", label: "near-wall plank" },
+    { f: hallF1 + 6, up: 3, expect: "minecraft:dark_oak_planks", label: "near-wall plank" },
+    { f: hallF1 + 2, up: 0, expect: "minecraft:stone_bricks", label: "near-wall foundation trim" }
   ];
-  const farWallSample = { f: 0, s: 13, up: 3, expect: "minecraft:stripped_dark_oak_log", label: "far wall (sMax) corner post at f1" };
+  const farWallSample = { f: hallF1, s: hallSMax, up: 3, expect: "minecraft:stripped_dark_oak_log", label: "far wall (sMax) corner post at f1" };
 
   for (const sample of nearWallSamples) {
-    const p = toWorld(state.origin, state.facing, sample.f, 5, sample.up);
+    const p = toWorld(state.origin, state.facing, sample.f, hallSMin, sample.up);
     assert(blockAt(elder.dimension, p.x, p.y, p.z) === sample.expect,
       `before any level-up: town hall ${sample.label} at f=${sample.f} is intact`);
   }
@@ -269,7 +278,7 @@ console.log("\n=== progression + professions ===");
     assert(result.done && result.leveledUpTo === level, `level ${level} built (${cfg.label})`);
 
     for (const sample of nearWallSamples) {
-      const p = toWorld(state.origin, state.facing, sample.f, 5, sample.up);
+      const p = toWorld(state.origin, state.facing, sample.f, hallSMin, sample.up);
       const actual = blockAt(elder.dimension, p.x, p.y, p.z);
       assert(actual === sample.expect,
         `after levelling to L${level}: town hall ${sample.label} at f=${sample.f} is still ${sample.expect} (got ${actual})`);
@@ -314,10 +323,19 @@ console.log("\n=== progression + professions ===");
     assert(r?.done && r.leveledUpTo === level, `setup: level ${level} built on the way to L5`);
   }
 
-  // Drop a block of natural terrain well inside the future perimeter so the
-  // interior sweep has something concrete to clear and we can observe it.
-  const probe = toWorld(origin, 0, 20, 20, 0);
-  elder.dimension.getBlock(probe).setType("minecraft:oak_leaves");
+  // Two probes, because the crossroads draws a deliberate line the legacy
+  // layout did not. `ringProbe` sits on the R44 curtain line, which the stage
+  // clears and builds on. `interiorProbe` sits on free ground between two
+  // quarters, which it must leave alone: sweeping the interior of an R94
+  // village is ~35,700 columns at up to ~40 block calls each, around 1.4
+  // million operations, which no amount of job-slicing makes affordable. The
+  // ground each building stands on is levelled by that building's own plot
+  // pass instead (village.js, "Pass 2"), and what is left between them is
+  // meant to stay natural.
+  const ringProbe = toWorld(origin, 0, 44, 20, 0);
+  const interiorProbe = toWorld(origin, 0, 20, 20, 0);
+  elder.dimension.getBlock(ringProbe).setType("minecraft:oak_leaves");
+  elder.dimension.getBlock(interiorProbe).setType("minecraft:oak_leaves");
 
   const capturedJobs = [];
   const originalRunJob = system.runJob;
@@ -328,14 +346,13 @@ console.log("\n=== progression + professions ===");
   system.runJob = originalRunJob;
 
   assert(leveled?.done && leveled.leveledUpTo === 5, "L5 (first fortification tier) still completes and reports done");
-  assert(capturedJobs.length >= 1, `buildFortifications hands the interior sweep to system.runJob (${capturedJobs.length} job(s) captured)`);
+  assert(capturedJobs.length >= 1, `the defence stage is handed to system.runJob (${capturedJobs.length} job(s) captured)`);
 
-  const stillLeaves = elder.dimension.getBlock(probe).typeId === "minecraft:oak_leaves";
-  assert(stillLeaves, "before the captured job is pumped at all: interior terrain is untouched (proves the sweep did not run synchronously inside tryLevelUp)");
+  const stillLeaves = elder.dimension.getBlock(ringProbe).typeId === "minecraft:oak_leaves";
+  assert(stillLeaves, "before the captured job is pumped at all: the wall line is untouched (proves the stage did not run synchronously inside tryLevelUp)");
 
-  // capturedJobs[0] is the interior sweep (prepareFortifiedArea schedules it
-  // first); the fortification build itself is a job too, and is captured
-  // after it. Both must yield rather than run to completion in one pump.
+  // Every captured job must yield rather than run to completion in one pump -
+  // that is the whole point of building an R94 curtain wall as a job.
   const job = capturedJobs[0];
   let steps = 0;
   const stepLimit = 5;
@@ -348,8 +365,10 @@ console.log("\n=== progression + professions ===");
     let s = other.next();
     while (!s.done) s = other.next();
   }
-  const clearedAfterFullDrain = elder.dimension.getBlock(probe).typeId !== "minecraft:oak_leaves";
-  assert(clearedAfterFullDrain, "once the job is fully drained, the interior terrain is cleared exactly as a synchronous pass would have left it");
+  const ringCleared = elder.dimension.getBlock(ringProbe).typeId !== "minecraft:oak_leaves";
+  assert(ringCleared, "once the job is fully drained, the ground under the curtain line has been cleared and built on");
+  const interiorUntouched = elder.dimension.getBlock(interiorProbe).typeId === "minecraft:oak_leaves";
+  assert(interiorUntouched, "the stage clears only its own narrow cells and leaves the village interior alone");
 }
 
 console.log(failures === 0 ? "\nALL FIX TESTS PASSED" : `\n${failures} FIX TEST(S) FAILED`);

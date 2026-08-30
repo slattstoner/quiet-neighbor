@@ -1,7 +1,7 @@
 import { ItemStack, world, system } from "@minecraft/server";
 import { buildSpecialBuilding, spawnSpecialResident, ALCHEMIST_PRODUCTS, giveProduct } from "./specials.js";
 import { toWorld } from "./util.js";
-import { PROP_ID, readFacing, readLevel, readOrigin, readProperty } from "./village_state.js";
+import { PROP_ID, PROP_LAYOUT_VERSION, readFacing, readLevel, readOrigin, readProperty } from "./village_state.js";
 
 export const SPECIAL_QUESTS = {
   ranger: {
@@ -62,7 +62,11 @@ function elderState(elder) {
     elder,
     origin: readOrigin(elder),
     facing: readFacing(elder),
-    id: readProperty(elder, PROP_ID)
+    id: readProperty(elder, PROP_ID),
+    // Which plot a shed claims depends on the village's layout: the legacy
+    // plots would put the old-timer's shed across the crossroads side road
+    // and the engineer's inside the farmer's yard (see V2_SPECIAL_PLOTS).
+    layoutVersion: readProperty(elder, PROP_LAYOUT_VERSION)
   };
 }
 

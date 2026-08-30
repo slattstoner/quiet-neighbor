@@ -277,7 +277,26 @@ function lightInterior(placer, shape) {
   placer.block(innerF2, innerSMax, shape.height - 2, "minecraft:lantern", { hanging: true });
 }
 
-export function buildTownHall(dimension, origin, facing) {
+export const TOWN_HALL_SIDE = 9;
+
+/**
+ * Where the progress chest and the elder stand inside a town hall built at
+ * `plotForward`/`side`. Both used to be absolute local coordinates written
+ * out separately in village.js (chest at 2,7 and elder at 4,9), which only
+ * happened to land inside the hall because the hall itself was nailed to
+ * forward 0 / side 9. Deriving them from the same two numbers the hall is
+ * built from is what lets the hall move at all - the alternative is three
+ * independent sets of magic numbers that drift apart the first time one of
+ * them changes (HANDOVER.md, "Грабли" #6).
+ */
+export function townHallFittings(plotForward = 0, side = TOWN_HALL_SIDE) {
+  return {
+    chest: { f: plotForward + 2, s: side },
+    elder: { f: plotForward + 4, s: side }
+  };
+}
+
+export function buildTownHall(dimension, origin, facing, plotForward = 0, side = TOWN_HALL_SIDE) {
   const placer = makePlacer(dimension, origin, facing);
   const mats = {
     foundation: "minecraft:stone_bricks",
@@ -287,13 +306,13 @@ export function buildTownHall(dimension, origin, facing) {
     roofStairs: "minecraft:stone_brick_stairs",
     gable: "minecraft:stone_bricks"
   };
-  const shape = houseShell(placer, 0, 9, 9, 9, 6, mats, "minecraft:dark_oak_door");
+  const shape = houseShell(placer, plotForward, side, 9, 9, 6, mats, "minecraft:dark_oak_door");
   const inward = oppositeCardinal(shape.streetCardinal);
 
   // Bell cupola on the ridge
-  placer.block(4, shape.midS, 6, "minecraft:dark_oak_fence");
-  placer.block(4, shape.midS, 7, "minecraft:dark_oak_fence");
-  placer.blockMulti(4, shape.midS, 8, "minecraft:bell", [
+  placer.block(shape.f1 + 4, shape.midS, 6, "minecraft:dark_oak_fence");
+  placer.block(shape.f1 + 4, shape.midS, 7, "minecraft:dark_oak_fence");
+  placer.blockMulti(shape.f1 + 4, shape.midS, 8, "minecraft:bell", [
     { "minecraft:cardinal_direction": shape.streetCardinal, attachment: "hanging", toggle_bit: false },
     { direction: dirIndex(shape.streetCardinal), attachment: "hanging", toggle_bit: false },
     { attachment: "hanging" }
@@ -301,10 +320,10 @@ export function buildTownHall(dimension, origin, facing) {
 
   // Council table down the middle, lectern, bookshelves, banners
   const farF = shape.f2 - 1;
-  placer.box(3, shape.midS - 1, 0, 6, shape.midS + 1, 0, "minecraft:red_carpet");
+  placer.box(shape.f1 + 3, shape.midS - 1, 0, shape.f1 + 6, shape.midS + 1, 0, "minecraft:red_carpet");
   for (const s of [shape.midS - 1, shape.midS + 1]) {
-    placer.block(2, s, 0, "minecraft:oak_fence");
-    placer.block(2, s, 1, "minecraft:wooden_pressure_plate");
+    placer.block(shape.f1 + 2, s, 0, "minecraft:oak_fence");
+    placer.block(shape.f1 + 2, s, 1, "minecraft:wooden_pressure_plate");
   }
   facingBlock(placer, farF, shape.midS, 0, "minecraft:lectern", shape.streetCardinal);
   for (const s of [shape.midS - 3, shape.midS - 2, shape.midS + 2, shape.midS + 3]) {
@@ -312,7 +331,7 @@ export function buildTownHall(dimension, origin, facing) {
     placer.block(shape.f1 + 1, s, 1, "minecraft:bookshelf");
   }
   // Banners flat against the inner face of the long walls
-  for (const f of [3, 6]) {
+  for (const f of [shape.f1 + 3, shape.f1 + 6]) {
     placer.blockMulti(f, shape.sMin + 1, 2, "minecraft:wall_banner", [
       { facing_direction: FACING_DIRECTION[inward] },
       { "minecraft:cardinal_direction": inward }
@@ -325,19 +344,25 @@ export function buildTownHall(dimension, origin, facing) {
   return shape;
 }
 
-export function buildCampfire(dimension, origin, facing, plotForward) {
+export function buildCampfire(dimension, origin, facing, plotForward, side) {
   const placer = makePlacer(dimension, origin, facing);
   const f = plotForward === undefined ? -6 : plotForward;
-  placer.box(f - 3, -3, -1, f + 3, 3, -1, "minecraft:cobblestone");
-  placer.box(f - 1, -1, -1, f + 1, 1, -1, "minecraft:gravel");
-  placer.block(f, 0, 0, "minecraft:campfire", { extinguished: false });
+  // The plaza used to be nailed to side 0, so it straddled the street and the
+  // road paving had to carve a hole around it (see CAMPFIRE_PLAZA). On the
+  // crossroads layout both roads run the full width of the village and there
+  // is no hole to carve, so the plaza gets a side of its own. `side` stays
+  // optional, so the legacy layout keeps the exact plaza it always had.
+  const c = side === undefined ? 0 : side;
+  placer.box(f - 3, c - 3, -1, f + 3, c + 3, -1, "minecraft:cobblestone");
+  placer.box(f - 1, c - 1, -1, f + 1, c + 1, -1, "minecraft:gravel");
+  placer.block(f, c, 0, "minecraft:campfire", { extinguished: false });
   // Log stools around the fire
   for (const [df, ds] of [[-2, -2], [2, 2], [-2, 2], [2, -2]]) {
-    placer.block(f + df, ds, 0, "minecraft:oak_log");
+    placer.block(f + df, c + ds, 0, "minecraft:oak_log");
   }
   // A couple of flower pots for life
-  placer.block(f - 3, 0, 0, "minecraft:oak_fence");
-  placer.block(f + 3, 0, 0, "minecraft:oak_fence");
+  placer.block(f - 3, c, 0, "minecraft:oak_fence");
+  placer.block(f + 3, c, 0, "minecraft:oak_fence");
 }
 
 /**
@@ -748,7 +773,6 @@ export function paveRoad(dimension, origin, facing, fromForward, toForward) {
  */
 export function extendPath(dimension, origin, facing, fromForward, toForward, protectedRects) {
   const placer = makePlacer(dimension, origin, facing);
-  const east = toForward >= 0;
   roadSegment(placer, 0, toForward);
   // The lamp-post lattice below is laid on a fixed 5-block grid with no
   // idea what's been built where. Skip any post whose column falls inside
@@ -756,15 +780,67 @@ export function extendPath(dimension, origin, facing, fromForward, toForward, pr
   // town hall/campfire/starter house area, which is close enough to the
   // street to collide on most level configurations, plus every plot the
   // caller knows about.
+  placeRoadLamps(dimension, origin, facing, "forward", 0, toForward, protectedRects, { skipPlaza: true });
+}
+
+/**
+ * Paves the crossroads out to `reach` on all four arms.
+ *
+ * The defence stage paves both arms end to end when a wall goes up
+ * (defences_roads.js), but the first wall is level 5 - without this a village
+ * would have no street at all for its first four levels, where the legacy
+ * layout grew one as it built. Materials match the defence stage's exactly
+ * (cobblestone down each centreline, gravel on the verges) so the stretch this
+ * lays and the stretch the wall lays read as one road.
+ *
+ * Idempotent, and re-run from the centre on every level-up rather than only
+ * across the new stretch - the same reason extendPath() re-paves the whole
+ * side each time: a column an earlier level missed would otherwise stay bare
+ * grass forever.
+ */
+export function paveCrossroadsArms(dimension, origin, facing, reach, halfWidth = 1) {
+  const placer = makePlacer(dimension, origin, facing);
+  const paint = (f, s) => {
+    placer.block(f, s, -1, f === 0 || s === 0 ? "minecraft:cobblestone" : "minecraft:gravel");
+    for (let up = 0; up <= 3; up++) placer.block(f, s, up, "minecraft:air");
+  };
+  for (let position = -reach; position <= reach; position++) {
+    for (let offset = -halfWidth; offset <= halfWidth; offset++) {
+      paint(position, offset);
+      paint(offset, position);
+    }
+  }
+}
+
+/**
+ * Lamp posts either side of a road arm, on a fixed five-block grid.
+ *
+ * Split out of extendPath because the crossroads layout has two road arms and
+ * gets the roads themselves from the defence stage - it needs the lattice
+ * without the paving. `protectedRects` are the plots the lattice must not
+ * plant a post inside (levels.js's builtPlotFootprints); the lattice is
+ * redrawn over the whole span on every call, so without them a later level
+ * would eventually stand a fence post inside an earlier house's wall.
+ *
+ * `halfWidth` is how far out from the centreline the posts stand. It defaults
+ * to the legacy street's own verge so extendPath is unchanged; the crossroads
+ * roads are narrower (three blocks, not five), so their posts come in closer.
+ */
+export function placeRoadLamps(dimension, origin, facing, axis, from, to, protectedRects, options) {
+  const placer = makePlacer(dimension, origin, facing);
   const rects = protectedRects && protectedRects.length ? protectedRects : [{ fMin: -8, fMax: 10, sMin: -13, sMax: 14 }];
   const inProtectedRect = (f, s) => rects.some(r => f >= r.fMin && f <= r.fMax && s >= r.sMin && s <= r.sMax);
-  const postS = ROAD_HALF_WIDTH + 1;
-  const step = east ? 5 : -5;
-  for (let f = 0; east ? f <= toForward : f >= toForward; f += step) {
+  const postOffset = options?.halfWidth === undefined ? ROAD_HALF_WIDTH + 1 : options.halfWidth;
+  const forwardAxis = axis !== "side";
+  const start = from, end = to;
+  const step = end >= start ? 5 : -5;
+  for (let position = start; end >= start ? position <= end : position >= end; position += step) {
     // The campfire plaza is its own lit space; a lamp post landing on its
     // pad would crowd the fire and its stools.
-    if (f >= CAMPFIRE_PLAZA.fMin && f <= CAMPFIRE_PLAZA.fMax) continue;
-    for (const s of [-postS, postS]) {
+    if (options?.skipPlaza && forwardAxis && position >= CAMPFIRE_PLAZA.fMin && position <= CAMPFIRE_PLAZA.fMax) continue;
+    for (const offset of [-postOffset, postOffset]) {
+      const f = forwardAxis ? position : offset;
+      const s = forwardAxis ? offset : position;
       if (inProtectedRect(f, s)) continue;
       placer.block(f, s, -1, "minecraft:cobblestone");
       placer.block(f, s, 0, "minecraft:oak_fence");
