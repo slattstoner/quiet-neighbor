@@ -10,6 +10,7 @@ import { startSpecialContentLoop } from "./special_content.js";
 import { startFortificationRepairLoop } from "./fortification_repair.js";
 import { startQuarterLoop } from "./quarter_runtime.js";
 import { startPatrolLoop } from "./patrol.js";
+import { SURVEY_CHARTER_ID, CHARTER_RANGE, charterMessage, useSurveyCharter } from "./outpost_runtime.js";
 
 const ORACLE_BELL_ID = "village:oracle_bell";
 const LEVEL_BELL_TARGETS = new Map([
@@ -19,8 +20,31 @@ const LEVEL_BELL_TARGETS = new Map([
 
 world.afterEvents.itemUse.subscribe((event) => {
   const { source: player, itemStack } = event;
+  if (!player || player.typeId !== "minecraft:player") return;
+
+  // The survey charter marks a site outside the village: an abandoned mine,
+  // a fallen watchtower, a forest camp, an old quarry. One per corner, four
+  // per village, always well outside the wall's final reach.
+  if (itemStack?.typeId === SURVEY_CHARTER_ID) {
+    const elder = findNearestElder(player.dimension, player.location, CHARTER_RANGE);
+    if (!elder) {
+      player.sendMessage(charterMessage({ ok: false, reason: "no_village" }));
+      return;
+    }
+    player.sendMessage("§7Ты разворачиваешь грамоту и сверяешь её со старыми отметками...");
+    system.run(() => {
+      try {
+        player.sendMessage(charterMessage(useSurveyCharter(player, elder)));
+      } catch (e) {
+        player.sendMessage(charterMessage(null));
+        console.warn("[village] survey charter failed: " + e);
+      }
+    });
+    return;
+  }
+
   const targetLevel = LEVEL_BELL_TARGETS.get(itemStack?.typeId);
-  if (!targetLevel || !player || player.typeId !== "minecraft:player") return;
+  if (!targetLevel) return;
 
   const dimension = player.dimension;
   const feet = player.location;

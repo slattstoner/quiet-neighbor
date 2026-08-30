@@ -4,6 +4,9 @@
   "texture_data": {
     "village_oracle_bell": {
       "textures": "textures/items/oracle_bell"
+    },
+    "village_survey_charter": {
+      "textures": "textures/items/survey_charter"
     }
   }
 }

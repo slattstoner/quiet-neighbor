@@ -1,0 +1,17 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:recipe_shaped": {
+    "description": { "identifier": "village:survey_charter" },
+    "tags": ["crafting_table"],
+    "pattern": [
+      "PPP",
+      "PCP",
+      "PPP"
+    ],
+    "key": {
+      "P": { "item": "minecraft:paper" },
+      "C": { "item": "minecraft:compass" }
+    },
+    "result": { "item": "village:survey_charter", "count": 1 }
+  }
+}
