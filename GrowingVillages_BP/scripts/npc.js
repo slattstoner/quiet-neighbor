@@ -113,11 +113,17 @@ export function spawnCraftsman(dimension, location, professionName, villageId, r
   return npc;
 }
 
-export function spawnResident(dimension, location, villageId, radius) {
+export function spawnResident(dimension, location, villageId, radius, options) {
   const npc = dimension.spawnEntity(VILLAGER_TYPE, location, ADULT_SPAWN_OPTIONS);
-  npc.nameTag = coloredName("Житель", COLORS.villager);
+  // District villagers are named for their trade but are still residents, not
+  // craftsmen: they carry no village_crafter tag, so tapping one falls through
+  // to vanilla trading instead of opening a quest menu that has no quest
+  // behind it. Their profession comes from the job-site block standing in
+  // their own workshop, exactly like the four craftsmen's does.
+  npc.nameTag = coloredName(options?.name || "Житель", COLORS.villager);
   npc.addTag("village:" + villageId);
   npc.addTag("village_npc");
+  if (options?.districtId) npc.setDynamicProperty("village:districtSlot", options.districtId);
   setHome(npc, location, radius === undefined ? 8 : radius, { tether: false });
   return npc;
 }

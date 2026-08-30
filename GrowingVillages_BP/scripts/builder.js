@@ -858,4 +858,20 @@ export function interiorCenter(shape) {
   };
 }
 
-export { makePlacer, placeDoor, facingBlock, placeBed, stairs };
+/**
+ * Which compass direction each local axis points to, for a village facing.
+ * Exported so modules that build their own structures orient doors, roofs and
+ * containers off the same four tables the core builders use, instead of
+ * copying them and drifting - the mirrored-stairs roof bug came from exactly
+ * that kind of independently maintained direction table.
+ */
+export function compassFor(facing) {
+  return {
+    plusSide: PLUS_SIDE_COMPASS[facing],
+    minusSide: MINUS_SIDE_COMPASS[facing],
+    plusForward: PLUS_FORWARD_COMPASS[facing],
+    minusForward: MINUS_FORWARD_COMPASS[facing]
+  };
+}
+
+export { makePlacer, placeDoor, facingBlock, placeBed, stairs, gabledRoof, lightInterior };

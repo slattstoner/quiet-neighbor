@@ -33,6 +33,19 @@ const AMBIENT_LINES = {
   ]
 };
 
+/**
+ * Lines for anyone the table above does not name. The districts brought in a
+ * dozen new trades, and a villager with a name and nothing to say reads as
+ * scenery - which is the opposite of the point of building the districts.
+ */
+const DISTRICT_LINES = [
+  "Работы теперь хватает на всех.",
+  "Раньше тут был пустырь, а гляди-ка.",
+  "Заходи, если что понадобится.",
+  "Слышал, за стеной опять кого-то видели ночью.",
+  "Деревня растёт. Не поспеваю."
+];
+
 /** Sends a message that looks like it came from the given entity, to every player near it. */
 export function announceToNearbyPlayers(entity, message, radius) {
   try {
@@ -72,7 +85,9 @@ export function startAmbientDialogue() {
       if (nearby.length === 0) continue;
       const speaker = nearby[Math.floor(Math.random() * nearby.length)];
       const name = plainName(speaker);
-      const lines = AMBIENT_LINES[name];
+      // A named villager we have no specific lines for still speaks - it is
+      // one of the district trades, and silence would make it furniture.
+      const lines = AMBIENT_LINES[name] || (speaker.hasTag("village_npc") ? DISTRICT_LINES : null);
       if (!lines) continue;
       const line = lines[Math.floor(Math.random() * lines.length)];
       player.sendMessage(`${speaker.nameTag}: §r${line}`);
