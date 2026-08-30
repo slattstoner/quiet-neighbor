@@ -9,7 +9,7 @@ export const SPECIAL_QUESTS = {
     chain: [
       { question: "Старожила просит 8 саженцев, 16 костной муки и 8 фонарей для восстановления лесной тропы.", item: "minecraft:oak_sapling", amount: 8, reward: "minecraft:bone_meal", rewardAmount: 8 },
       { question: "Принеси 16 брёвен и 8 компостеров: лесничему нужен питомник.", item: "minecraft:oak_log", amount: 16, reward: "minecraft:lantern", rewardAmount: 4 },
-      { question: "Принеси карту и 4 изумруда, чтобы отметить безопасную дорогу.", item: "minecraft:map", amount: 1, reward: "minecraft:iron_axe", rewardAmount: 1 }
+      { question: "Принеси карту и 4 изумруда, чтобы отметить безопасную дорогу.", item: "minecraft:empty_map", amount: 1, reward: "minecraft:iron_axe", rewardAmount: 1 }
     ],
     complete: "Лесная тропа снова открыта. Теперь деревня будет помнить, откуда приходит древесина."
   },
