@@ -132,8 +132,28 @@ export function spawnTowerGuard(dimension, location, villageId, radius) {
   guard.addTag("village:" + villageId);
   guard.addTag("village_guard");
   guard.addTag("village_npc");
+  // Same stable role marker the craftsmen carry, so quest code can identify a
+  // watchman without parsing his (coloured, localisable) name tag. Guards from
+  // saves made before this existed are still recognised by the tag above.
+  guard.setDynamicProperty("village:roleId", "sentinel");
   setHome(guard, location, radius === undefined ? 3 : radius);
   return guard;
+}
+
+/**
+ * The elder of the village a given NPC belongs to. Every village NPC carries a
+ * "village:<id>" tag, and exactly one entity in that village also carries
+ * "village_elder", so the pair identifies the right council NPC even with
+ * several villages loaded at once.
+ */
+export function findVillageElder(npc) {
+  try {
+    const tag = npc?.getTags?.().find((entry) => entry.startsWith("village:"));
+    if (!tag || !npc.dimension?.getEntities) return null;
+    return npc.dimension.getEntities({ tags: ["village_elder", tag] })[0] || null;
+  } catch (error) {
+    return null;
+  }
 }
 
 /**

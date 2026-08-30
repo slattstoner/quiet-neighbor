@@ -3,6 +3,13 @@ import { effectiveRequirementsText, tryLevelUp, chestSatisfiesRequirements } fro
 import { applyCraftsmanUpgrade } from "./upgrades.js";
 import { craftsmanItemLocalizationKey, getCraftsmanQuestView, tryCompleteCraftsmanTurnIn } from "./craftsman_quests.js";
 import { announceToNearbyPlayers } from "./dialogue.js";
+import { findVillageElder } from "./npc.js";
+import {
+  getSentinelArcView,
+  sentinelRoleLocalizationKey,
+  sentinelStepAwaits,
+  tryCompleteSentinelTurnIn
+} from "./sentinel_quests.js";
 import { SPECIAL_QUESTS, getSpecialQuestStep, turnInSpecialQuest, alchemistProducts, buyAlchemistProduct } from "./special_content.js";
 import { buildChapterJournalModel } from "./chapter_journal.js";
 import {
@@ -62,6 +69,32 @@ const EXTENSION_KEYS = Object.freeze({
   staleState: "growing_villages.ui.elder.special.stale_state",
   unavailable: "growing_villages.ui.elder.special.unavailable",
   error: "growing_villages.ui.elder.special.error"
+});
+
+// Watchman courier arc chrome. Its own namespace: the arc runs across the
+// guard *and* four craftsmen, so it can never borrow the craftsman scope
+// without the two turn-in flows colliding in the same menu.
+const SENTINEL_KEYS = Object.freeze({
+  title: "growing_villages.ui.sentinel.title",
+  button: "growing_villages.ui.sentinel.button",
+  ownButton: "growing_villages.ui.sentinel.own_button",
+  hubBody: "growing_villages.ui.sentinel.hub_body",
+  turnIn: "growing_villages.ui.sentinel.turn_in",
+  cancel: "growing_villages.ui.sentinel.cancel",
+  close: "growing_villages.ui.sentinel.close",
+  needHeader: "growing_villages.ui.sentinel.need_header",
+  needLine: "growing_villages.ui.sentinel.need_line",
+  rewardHeader: "growing_villages.ui.sentinel.reward_header",
+  rewardLine: "growing_villages.ui.sentinel.reward_line",
+  progress: "growing_villages.ui.sentinel.progress",
+  goSee: "growing_villages.ui.sentinel.go_see",
+  waitingAt: "growing_villages.ui.sentinel.waiting_at",
+  notEnough: "growing_villages.ui.sentinel.not_enough",
+  inventoryFull: "growing_villages.ui.sentinel.inventory_full",
+  noInventory: "growing_villages.ui.sentinel.no_inventory",
+  staleState: "growing_villages.ui.sentinel.stale_state",
+  unavailable: "growing_villages.ui.sentinel.unavailable",
+  error: "growing_villages.ui.sentinel.error"
 });
 
 function isUsableEntity(entity) {
@@ -334,16 +367,6 @@ export async function openFinalCityMenu(player, elder) {
   await showFinalMessage(player, FINAL_KEYS.depositDone);
 }
 
-function findCraftsmanElder(npc) {
-  try {
-    const villageTag = npc?.getTags?.().find((tag) => tag.startsWith("village:"));
-    if (!villageTag || !npc.dimension?.getEntities) return null;
-    return npc.dimension.getEntities({ tags: ["village_elder", villageTag] })[0] || null;
-  } catch (error) {
-    return null;
-  }
-}
-
 function craftsmanErrorKey(reason, view) {
   if (reason === "locked") return view?.arc?.localization?.locked || "growing_villages.ui.craftsman.quest.locked";
   if (reason === "inventory_full") return "growing_villages.ui.craftsman.quest.inventory_full";
@@ -363,9 +386,14 @@ async function showCraftsmanMessage(player, titleKey, bodyKey) {
     .show(player);
 }
 
-export async function openCraftsmanMenu(player, npc) {
+/**
+ * The craftsman's own five-step chain. Split out of openCraftsmanMenu so the
+ * watchman's courier step can share the same NPC without either flow having
+ * to know about the other's state.
+ */
+async function openCraftsmanQuestForm(player, npc) {
   if (!isUsableEntity(player) || !isUsableEntity(npc)) return;
-  const elder = findCraftsmanElder(npc);
+  const elder = findVillageElder(npc);
   const view = getCraftsmanQuestView(npc, elder, player);
   if (!view.ok || view.status !== "active") {
     await showCraftsmanMessage(player, view?.arc?.localization?.title || "growing_villages.ui.craftsman.quest.title", craftsmanErrorKey(view.reason, view));
@@ -390,7 +418,7 @@ export async function openCraftsmanMenu(player, npc) {
   const response = await form.show(player);
   if (!isUsableEntity(player) || !isUsableEntity(npc) || response.canceled || response.selection !== 0) return;
 
-  const currentElder = findCraftsmanElder(npc);
+  const currentElder = findVillageElder(npc);
   const result = tryCompleteCraftsmanTurnIn(npc, currentElder, player, view.stepId);
   if (!result.ok) {
     await showCraftsmanMessage(player, view.arc.localization.title, craftsmanErrorKey(result.reason, result.view || view));
@@ -402,6 +430,163 @@ export async function openCraftsmanMenu(player, npc) {
   }
   await showCraftsmanMessage(player, view.arc.localization.title,
     result.chainComplete ? view.arc.localization.complete : stepLocalization.complete);
+}
+
+
+function sentinelErrorKey(reason) {
+  if (reason === "not_enough") return SENTINEL_KEYS.notEnough;
+  if (reason === "inventory_full") return SENTINEL_KEYS.inventoryFull;
+  if (reason === "no_inventory") return SENTINEL_KEYS.noInventory;
+  if (reason === "stale_state" || reason === "wrong_giver") return SENTINEL_KEYS.staleState;
+  if (reason === "locked" || reason === "arc_complete") return SENTINEL_KEYS.unavailable;
+  return SENTINEL_KEYS.error;
+}
+
+async function showSentinelMessage(player, bodyKey, withArgs = []) {
+  if (!isUsableEntity(player)) return;
+  await new MessageFormData()
+    .title(translated(SENTINEL_KEYS.title))
+    .body(translated(bodyKey, withArgs))
+    .button1(translated(SENTINEL_KEYS.close))
+    .button2(translated(SENTINEL_KEYS.cancel))
+    .show(player);
+}
+
+async function showSentinelResult(player, completeKey, nextGiverRoleId) {
+  if (!isUsableEntity(player)) return;
+  const parts = [translated(completeKey)];
+  if (nextGiverRoleId) {
+    parts.push({ text: "\n\n" }, translated(SENTINEL_KEYS.goSee,
+      { rawtext: [{ translate: sentinelRoleLocalizationKey(nextGiverRoleId) }] }));
+  }
+  await new MessageFormData()
+    .title(translated(SENTINEL_KEYS.title))
+    .body({ rawtext: parts })
+    .button1(translated(SENTINEL_KEYS.close))
+    .button2(translated(SENTINEL_KEYS.cancel))
+    .show(player);
+}
+
+function sentinelItemLine(key, entry) {
+  return translated(key, { rawtext: [
+    { text: String(entry.amount) },
+    { translate: craftsmanItemLocalizationKey(entry.itemId) }
+  ] });
+}
+
+function sentinelStepBody(view) {
+  const step = view.stepData;
+  const parts = [
+    translated(step.localization.title), { text: "\n" },
+    translated(step.localization.intro), { text: "\n\n" },
+    translated(SENTINEL_KEYS.needHeader)
+  ];
+  for (const requirement of view.requirements) {
+    parts.push({ text: "\n" }, sentinelItemLine(SENTINEL_KEYS.needLine, requirement));
+  }
+  if (view.rewards.length > 0) {
+    parts.push({ text: "\n\n" }, translated(SENTINEL_KEYS.rewardHeader));
+    for (const reward of view.rewards) {
+      parts.push({ text: "\n" }, sentinelItemLine(SENTINEL_KEYS.rewardLine, reward));
+    }
+  }
+  parts.push({ text: "\n\n" }, translated(SENTINEL_KEYS.progress, [String(step.number), String(view.stepCount)]));
+  return { rawtext: parts };
+}
+
+/**
+ * Renders and commits the one courier step that is currently waiting at this
+ * NPC. Re-reads the arc after the form closes, so two players talking to two
+ * different NPCs can never hand in the same step twice.
+ */
+async function openSentinelStepForm(player, npc) {
+  if (!isUsableEntity(player) || !isUsableEntity(npc)) return;
+  const view = sentinelStepAwaits(npc, findVillageElder(npc));
+  if (!view) {
+    await showSentinelMessage(player, SENTINEL_KEYS.unavailable);
+    return;
+  }
+
+  const form = new ActionFormData()
+    .title(translated(view.arc.localization.title))
+    .body(sentinelStepBody(view))
+    .button(translated(SENTINEL_KEYS.turnIn))
+    .button(translated(SENTINEL_KEYS.cancel));
+
+  const response = await form.show(player);
+  if (!isUsableEntity(player) || !isUsableEntity(npc) || response.canceled || response.selection !== 0) return;
+
+  const elder = findVillageElder(npc);
+  const result = tryCompleteSentinelTurnIn(npc, elder, player, view.stepId);
+  if (!result.ok) {
+    await showSentinelMessage(player, sentinelErrorKey(result.reason));
+    return;
+  }
+
+  if (result.arcComplete) {
+    announceToNearbyPlayers(npc, "§cДозорный: §rЗа гребнем встал ответный огонь. Деревня больше не одна.", 48);
+    try { npc.dimension.playSound("random.levelup", npc.location); } catch (error) { /* sound is optional */ }
+    await showSentinelResult(player, view.stepData.localization.complete, null);
+    return;
+  }
+  // The hand-off line goes in the same dialog as the step's own closing line:
+  // a second modal for one sentence reads as the menu glitching, and the
+  // player would dismiss it before reading where to go next.
+  await showSentinelResult(player, view.stepData.localization.complete, result.nextGiverRoleId);
+}
+
+/**
+ * Tower guard tap. The watchman is a quest giver rather than a trader, so the
+ * menu reports the arc's state from wherever it currently stands, including
+ * the case where the open step is waiting at a craftsman across the village.
+ */
+export async function openSentinelMenu(player, guard) {
+  if (!isUsableEntity(player) || !isUsableEntity(guard)) return;
+  const view = getSentinelArcView(guard, findVillageElder(guard));
+  if (!view.ok) {
+    await showSentinelMessage(player, SENTINEL_KEYS.error);
+    return;
+  }
+  if (view.status === "locked") {
+    await showSentinelMessage(player, view.arc.localization.locked);
+    return;
+  }
+  if (view.status === "complete") {
+    await showSentinelMessage(player, view.arc.localization.complete);
+    return;
+  }
+  if (view.status === "elsewhere") {
+    await showSentinelMessage(player, SENTINEL_KEYS.waitingAt,
+      { rawtext: [{ translate: sentinelRoleLocalizationKey(view.waitingRoleId) }] });
+    return;
+  }
+  return openSentinelStepForm(player, guard);
+}
+
+/**
+ * Craftsman tap. When the watchman's courier run is currently waiting at this
+ * craftsman, the tap opens a two-entry hub instead of going straight to his
+ * own chain - both errands stay reachable, and neither hides the other.
+ */
+export async function openCraftsmanMenu(player, npc) {
+  if (!isUsableEntity(player) || !isUsableEntity(npc)) return;
+  const elder = findVillageElder(npc);
+  const courier = sentinelStepAwaits(npc, elder);
+  if (!courier) return openCraftsmanQuestForm(player, npc);
+
+  const own = getCraftsmanQuestView(npc, elder, player);
+  const hasOwnQuest = own.ok && own.status === "active";
+  const form = new ActionFormData()
+    .title(translated(SENTINEL_KEYS.title))
+    .body(translated(SENTINEL_KEYS.hubBody))
+    .button(translated(SENTINEL_KEYS.button));
+  if (hasOwnQuest) form.button(translated(SENTINEL_KEYS.ownButton));
+  form.button(translated(SENTINEL_KEYS.cancel));
+
+  const response = await form.show(player);
+  if (!isUsableEntity(player) || !isUsableEntity(npc) || response.canceled) return;
+  if (response.selection === 0) return openSentinelStepForm(player, npc);
+  if (hasOwnQuest && response.selection === 1) return openCraftsmanQuestForm(player, npc);
 }
 
 

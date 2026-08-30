@@ -1,7 +1,7 @@
 import { world, system } from "@minecraft/server";
 import { foundVillageAtLevel, findNearestElder } from "./village.js";
 import { facingFromDirection } from "./util.js";
-import { openElderMenu, openCraftsmanMenu, openOldtimerMenu, openAlchemistMenu } from "./ui.js";
+import { openElderMenu, openCraftsmanMenu, openOldtimerMenu, openAlchemistMenu, openSentinelMenu } from "./ui.js";
 import { startAmbientDialogue } from "./dialogue.js";
 import { startTetherLoop, repairGolem } from "./npc.js";
 import { startProductionLoop } from "./production.js";
@@ -94,6 +94,16 @@ world.beforeEvents.playerInteractWithEntity.subscribe((event) => {
   if (target.hasTag("village_alchemist")) {
     event.cancel = true;
     system.run(() => openAlchemistMenu(player));
+    return;
+  }
+
+  // Tower guards: same convention as craftsmen - a normal tap opens the
+  // watchman's courier arc, sneak-tapping falls through to whatever vanilla
+  // would have done with this villager.
+  if (target.hasTag("village_guard")) {
+    if (player.isSneaking) return;
+    event.cancel = true;
+    system.run(() => openSentinelMenu(player, target));
     return;
   }
 

@@ -203,5 +203,39 @@ console.log("\n=== non-existent block identifiers ===");
   assert(offenders === 0, `no script places a block using a non-existent identifier (${offenders} found)`);
 }
 
+// ---------- 7. NON-EXISTENT ITEM IDENTIFIERS ----------
+// The item equivalent of the block scan above, and it exists for the same
+// reason: quest requirements are only ever *compared* against inventory
+// contents, never constructed, so a bad item id produces no error at all -
+// just a quest step whose requirement can never be satisfied. That is how
+// `minecraft:map` sat in the cartographer's final step and in the ranger
+// arc: Bedrock has `empty_map` and `filled_map`, and no plain `map`, so
+// those two steps were quietly impossible to hand in.
+//
+// Every id below was confirmed ABSENT from the official item listing at
+// learn.microsoft.com/minecraft/creator/reference/content/vanillalistingsreference/items.
+console.log("\n=== non-existent item identifiers ===");
+{
+  const WRONG_ITEM_IDS = {
+    "minecraft:map": "minecraft:empty_map"
+  };
+  const files = readdirSync("./scripts").filter((f) => f.endsWith(".js"));
+  let offenders = 0;
+  for (const file of files) {
+    const text = readFileSync(`./scripts/${file}`, "utf8");
+    for (const [i, line] of text.split("\n").entries()) {
+      // A comment explaining the past fix legitimately names the dead id.
+      if (/^\s*(\/\/|\*)/.test(line)) continue;
+      for (const [bad, good] of Object.entries(WRONG_ITEM_IDS)) {
+        if (new RegExp(`"${bad}"`).test(line)) {
+          offenders++;
+          console.error(`  ${file}:${i + 1}: ${bad} does not exist - use ${good}`);
+        }
+      }
+    }
+  }
+  assert(offenders === 0, `no script references an item using a non-existent identifier (${offenders} found)`);
+}
+
 console.log(failures === 0 ? "\nALL LINT CHECKS PASSED" : `\n${failures} LINT CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
