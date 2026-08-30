@@ -8,6 +8,7 @@ import {
 } from "./levels.js";
 import { buildFortifications, perimeterFor } from "./walls.js";
 import { buildDefenceStageJob, clearStageRingJob, planDefenceStage, previousDefenceStage } from "./defences_roads.js";
+import { assignPatrol } from "./patrol.js";
 import { generateVillageName, updateGateSign } from "./signboard.js";
 import { holdLoadedArea, prepareSite, sampleGroundLevel, withLoadedArea, withRetry } from "./terrain.js";
 import { paletteAt, paletteById } from "./palettes.js";
@@ -421,7 +422,14 @@ function raiseCrossroadsDefences(elder, state, nextLevel, stageLevel) {
       // spawned into a tower that does not exist yet falls to the ground.
       for (const tower of plan.towers) {
         const at = toWorld(state.origin, state.facing, tower.standAt.f, tower.standAt.s, tower.standAt.up);
-        withRetry(() => spawnTowerGuard(dimension, { x: at.x + 0.5, y: at.y, z: at.z + 0.5 }, state.id, 3));
+        // Spawn and patrol assignment are one retried unit: a guard that
+        // spawned but never got its route would stand in its tower forever
+        // with no sign anything was wrong.
+        withRetry(() => {
+          const guard = spawnTowerGuard(dimension, { x: at.x + 0.5, y: at.y, z: at.z + 0.5 }, state.id, 3);
+          assignPatrol(guard, tower.id, stageLevel, state.origin, state.facing);
+          return guard;
+        });
         yield;
       }
       for (const gate of plan.gates) {

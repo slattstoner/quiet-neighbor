@@ -363,6 +363,23 @@ export function buildCampfire(dimension, origin, facing, plotForward, side) {
   // A couple of flower pots for life
   placer.block(f - 3, c, 0, "minecraft:oak_fence");
   placer.block(f + 3, c, 0, "minecraft:oak_fence");
+
+  // The village bell, on the square rather than only up in the town hall
+  // cupola. In Bedrock a bell is the village's meeting-area point of
+  // interest: it is what vanilla's own behavior.mingle sends villagers to
+  // gather round in the evening (wiki.bedrock.dev/entities/village-mechanic).
+  // The hall's bell hangs eight blocks up inside a closed roof; one standing
+  // on the open square, from level one, is what actually gives the village
+  // somewhere to gather.
+  for (const post of [f - 1, f + 1]) placer.box(post, c - 3, 0, post, c - 3, 2, "minecraft:oak_fence");
+  placer.block(f, c - 3, 2, "minecraft:oak_fence");
+  placer.blockMulti(f, c - 3, 1, "minecraft:bell", [
+    { "minecraft:cardinal_direction": PLUS_SIDE_COMPASS[placer.facing], attachment: "hanging", toggle_bit: false },
+    { direction: dirIndex(PLUS_SIDE_COMPASS[placer.facing]), attachment: "hanging", toggle_bit: false },
+    { attachment: "hanging" }
+  ]);
+  placer.block(f - 1, c - 3, 3, "minecraft:lantern", { hanging: false });
+  placer.block(f + 1, c - 3, 3, "minecraft:lantern", { hanging: false });
 }
 
 /**

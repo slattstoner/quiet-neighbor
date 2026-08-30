@@ -9,6 +9,7 @@ import { startExplorationVillageLoop } from "./worldgen.js";
 import { startSpecialContentLoop } from "./special_content.js";
 import { startFortificationRepairLoop } from "./fortification_repair.js";
 import { startQuarterLoop } from "./quarter_runtime.js";
+import { startPatrolLoop } from "./patrol.js";
 
 const ORACLE_BELL_ID = "village:oracle_bell";
 const LEVEL_BELL_TARGETS = new Map([
@@ -144,5 +145,6 @@ system.run(() => {
   startSpecialContentLoop();
   startFortificationRepairLoop();
   startQuarterLoop();
+  startPatrolLoop();
   world.sendMessage("§7[Growing Villages] бета загружена.");
 });

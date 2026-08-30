@@ -317,8 +317,14 @@ function* curtainJob(placer, stage) {
     if (style.family !== "palisade") {
       placer.box(inner.f, inner.s, 0, inner.f, inner.s, style.height - 2, style.foundation);
       placer.block(inner.f, inner.s, style.height - 1, style.wall);
-    } else if ((cell.f + cell.s) % 3 === 0) {
-      placer.block(inner.f, inner.s, style.height - 1, "minecraft:oak_planks");
+    } else {
+      // A continuous plank fighting-walk, one block in from the stockade and
+      // low enough that the palisade covers whoever stands on it. It used to
+      // be planks on every third cell, which is not a walk - it is three
+      // quarters of a hole, and a watchman sent along it would have walked
+      // into thin air. walls.js's own palisade has always laid this
+      // continuously (its walkUp), so this matches rather than invents.
+      placer.block(inner.f, inner.s, style.height - 2, "minecraft:oak_planks");
     }
     if (++done % CURTAIN_SLICE === 0) yield;
   }
@@ -433,6 +439,41 @@ function ensureActiveAllocationsClear(stage) {
     if (touchingCurtain) throw new Error(`active allocation conflicts with defence stage: ${allocation.buildingId}`);
   }
 }
+
+/**
+ * Where the wall-walk actually is for a stage: the local line one block in
+ * from the curtain, and the height something standing on it occupies.
+ *
+ * Derived from the same TIER_STYLE heights buildCurtain uses, because a patrol
+ * that carries its own idea of how tall a wall is would silently walk through
+ * the parapet the first time a tier's height changed. Palisade guards stand on
+ * the plank walk with the stockade still above them; on the stone tiers the
+ * inner line is solid to height-1, so the walking surface is its top.
+ */
+export function wallWalkFor(stageOrLevel) {
+  const stage = stageFor(stageOrLevel);
+  const style = styleFor(stage.tier);
+  return Object.freeze({
+    radius: stage.radius,
+    tier: stage.tier,
+    family: style.family,
+    /** Local f/s distance from the centre to the walk line. */
+    line: stage.radius - 1,
+    /** The `up` a mob standing on the walk occupies. */
+    standUp: style.family === "palisade" ? style.height - 1 : style.height
+  });
+}
+
+/**
+ * Which wall a tower's watchman patrols. One edge each, so all four sides of
+ * the village get a sentinel rather than two of them getting two.
+ */
+export const TOWER_PATROL_EDGE = Object.freeze({
+  north_east: "fMax",
+  south_east: "sMax",
+  south_west: "fMin",
+  north_west: "sMin"
+});
 
 /** The stage a village had before `stageOrLevel`, or null if this is its first wall. */
 export function previousDefenceStage(stageOrLevel) {
