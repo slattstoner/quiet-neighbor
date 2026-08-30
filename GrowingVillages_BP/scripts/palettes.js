@@ -21,7 +21,7 @@ const BIOME_TO_PALETTE = {
   "minecraft:desert": "desert"
 };
 
-export function paletteForBiomeId(biomeId) {
+function paletteForBiomeId(biomeId) {
   return PALETTES[BIOME_TO_PALETTE[biomeId] || "plains"];
 }
 

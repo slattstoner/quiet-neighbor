@@ -1,6 +1,7 @@
 import { world, system } from "@minecraft/server";
 import { repairTowers } from "./walls.js";
 import { fullVillageMaxForward } from "./levels.js";
+import { PROP_TIER, isUsableOrigin, readFacing, readOrigin, readProperty } from "./village_state.js";
 
 /**
  * Keeps every fortified village's corner watchtowers standing.
@@ -37,15 +38,11 @@ export function startFortificationRepairLoop() {
         continue;
       }
       for (const elder of elders) {
-        const tier = Number(elder.getDynamicProperty("village:tier") || 0);
+        const tier = Number(readProperty(elder, PROP_TIER) || 0);
         if (!tier) continue;
-        const origin = {
-          x: elder.getDynamicProperty("village:originX"),
-          y: elder.getDynamicProperty("village:originY"),
-          z: elder.getDynamicProperty("village:originZ")
-        };
-        if (!Number.isFinite(origin.x) || !Number.isFinite(origin.y) || !Number.isFinite(origin.z)) continue;
-        const facing = Number(elder.getDynamicProperty("village:facing") || 0);
+        const origin = readOrigin(elder);
+        if (!isUsableOrigin(origin)) continue;
+        const facing = Number(readFacing(elder) || 0);
         try {
           const rebuilt = repairTowers(player.dimension, origin, facing, fullVillageMaxForward(), tier);
           if (rebuilt > 0) {

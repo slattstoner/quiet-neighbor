@@ -1,6 +1,8 @@
 import { ItemStack } from "@minecraft/server";
 import { QUESTS } from "./quests.js";
 import { craftsmanArcForRole } from "./quest_contract_v2.js";
+import { countItems, inventoryContainer, removeExact, restoreContainer, snapshotContainer } from "./inventory.js";
+import { PROP_LEVEL, readProperty } from "./village_state.js";
 
 const ROLE_ID_PROPERTY = "village:roleId";
 const LEGACY_ROLE_BY_ID = Object.freeze({
@@ -18,14 +20,6 @@ function strippedName(nameTag) {
   return typeof nameTag === "string" ? nameTag.replace(/§./g, "") : "";
 }
 
-function readProperty(entity, key) {
-  try {
-    return entity?.getDynamicProperty?.(key);
-  } catch (error) {
-    return undefined;
-  }
-}
-
 function villageTag(entity) {
   try {
     return entity?.getTags?.().find((tag) => tag.startsWith("village:")) || null;
@@ -38,53 +32,6 @@ function sameVillage(npc, elder) {
   const npcVillage = villageTag(npc);
   const elderVillage = villageTag(elder);
   return !!npcVillage && npcVillage === elderVillage;
-}
-
-function inventoryContainer(player) {
-  try {
-    return player?.getComponent?.("minecraft:inventory")?.container || null;
-  } catch (error) {
-    return null;
-  }
-}
-
-function countItems(container, typeId) {
-  let total = 0;
-  for (let slot = 0; slot < container.size; slot++) {
-    const stack = container.getItem(slot);
-    if (stack?.typeId === typeId) total += stack.amount;
-  }
-  return total;
-}
-
-function snapshotContainer(container) {
-  return Array.from({ length: container.size }, (_, slot) => {
-    const stack = container.getItem(slot);
-    return stack ? { typeId: stack.typeId, amount: stack.amount } : undefined;
-  });
-}
-
-function restoreContainer(container, snapshot) {
-  for (let slot = 0; slot < container.size; slot++) {
-    const stack = snapshot[slot];
-    container.setItem(slot, stack ? new ItemStack(stack.typeId, stack.amount) : undefined);
-  }
-}
-
-function removeExact(container, typeId, amount) {
-  let remaining = amount;
-  for (let slot = 0; slot < container.size && remaining > 0; slot++) {
-    const stack = container.getItem(slot);
-    if (!stack || stack.typeId !== typeId) continue;
-    const taken = Math.min(remaining, stack.amount);
-    remaining -= taken;
-    if (taken === stack.amount) container.setItem(slot, undefined);
-    else {
-      stack.amount -= taken;
-      container.setItem(slot, stack);
-    }
-  }
-  return remaining === 0;
 }
 
 function rewardSlot(container, reward) {
@@ -146,7 +93,7 @@ export function getCraftsmanQuestView(npc, elder, player) {
   if (!arc || !legacyQuest) return neutral("missing_legacy_arc", { roleId });
   if (!sameVillage(npc, elder)) return neutral("different_village", { roleId });
 
-  const level = readProperty(elder, "village:level");
+  const level = readProperty(elder, PROP_LEVEL);
   if (!Number.isInteger(level)) return neutral("invalid_level", { roleId });
   if (level < arc.minLevel) {
     return Object.freeze({ ok: true, status: "locked", roleId, arc, level, minLevel: arc.minLevel });

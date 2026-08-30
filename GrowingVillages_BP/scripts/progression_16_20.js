@@ -1,6 +1,7 @@
 // Pure L16–20 progression contract. This module imports only declarative
 // quest data and returns immutable transition decisions without external actions.
 import { LEVEL_CHAPTERS, SPECIAL_ARCS } from "./quest_contract_v2.js";
+import { PROP_LEVEL } from "./village_state.js";
 
 export const EXTENSION_LEVELS = Object.freeze([16, 17, 18, 19, 20]);
 export const EXTENSION_BUILDING_IDS = Object.freeze([
@@ -75,7 +76,7 @@ function normalizeBaseLevel(value) { return Number.isInteger(value) && value >= 
 
 export function readExtensionProgression(reader) {
   let valid = true;
-  const rawBaseLevel = readValue(reader, "village:level") ?? readValue(reader, "baseLevel");
+  const rawBaseLevel = readValue(reader, PROP_LEVEL) ?? readValue(reader, "baseLevel");
   const baseLevel = normalizeBaseLevel(rawBaseLevel);
   if (baseLevel === null) valid = false;
   const arcSteps = {};

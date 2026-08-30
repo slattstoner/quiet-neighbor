@@ -211,7 +211,7 @@ const BUILDERS = { alchemist: buildAlchemist, oldtimer: buildOldtimer, ranger: b
  * levels.js uses for house plots. Matches the footprint
  * buildSpecialBuilding() levels before building (spec.forward/side +/- 6).
  */
-export function specialFootprint(key) {
+function specialFootprint(key) {
   const spec = SPECIAL_BUILDINGS[key];
   if (!spec) return null;
   return {

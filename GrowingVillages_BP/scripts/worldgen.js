@@ -3,6 +3,7 @@ import { foundVillage, findNearestElder } from "./village.js";
 import { toWorld } from "./util.js";
 import { paletteAt } from "./palettes.js";
 import { probeGround } from "./terrain.js";
+import { PROP_PALETTE } from "./village_state.js";
 
 const CELL = 512;
 const MIN_DISTANCE = 360;
@@ -76,7 +77,7 @@ function tryGenerateFor(player) {
     if (findNearestElder(dimension, site, MIN_DISTANCE) || hasVanillaVillageNearby(dimension, site)) return;
     const elder = foundVillage(player, site, candidate.facing, palette.id);
     elder?.setDynamicProperty("village:generated", true);
-    elder?.setDynamicProperty("village:palette", palette.id);
+    elder?.setDynamicProperty(PROP_PALETTE, palette.id);
     player.sendMessage(`§7Вдали виднеется новое поселение: §r${palette.label}.`);
   });
 }

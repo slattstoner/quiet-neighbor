@@ -29,7 +29,7 @@ function isValidApproach(approach) {
 }
 
 /** Pure preflight. It rejects malformed metadata before any terrain edit. */
-export function connectorPlanFor(metadata) {
+function connectorPlanFor(metadata) {
   if (!metadata || typeof metadata.buildingId !== "string") throw new Error("city metadata is required");
   const approach = metadata.approach;
   if (!isValidApproach(approach)) throw new Error(`invalid city approach: ${metadata.buildingId}`);

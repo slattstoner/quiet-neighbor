@@ -7,6 +7,8 @@ import {
 } from "./progression_16_20.js";
 import { buildPlannedVillageBuilding, getPlannedBuildState } from "./planned_build_transaction.js";
 import { LAYOUT_VERSION_V2, getLayoutVersion, getVillageState, refreshSign } from "./village.js";
+import { removeExact, restoreContainer, snapshotContainer } from "./inventory.js";
+import { PROP_LEVEL } from "./village_state.js";
 
 /**
  * Stage 11 coordinator for L19-L20 only. Kept isolated from Stage 10's
@@ -23,8 +25,7 @@ import { LAYOUT_VERSION_V2, getLayoutVersion, getVillageState, refreshSign } fro
 
 export const FINAL_RUNTIME_LEVELS = Object.freeze([19, 20]);
 const ACTIVE_LEVELS = new Set(FINAL_RUNTIME_LEVELS);
-export const EXTENSION_CHAPTER_KEY = "village:v2:extension:chapter";
-export const VILLAGE_LEVEL_KEY = "village:level";
+const EXTENSION_CHAPTER_KEY = "village:v2:extension:chapter";
 
 function frozen(value) {
   return Object.freeze(value);
@@ -110,36 +111,6 @@ function chestTotals(container) {
     if (stack) totals[stack.typeId] = (totals[stack.typeId] || 0) + stack.amount;
   }
   return totals;
-}
-
-function snapshotContainer(container) {
-  return Array.from({ length: container.size }, (_, slot) => {
-    const stack = container.getItem(slot);
-    return stack ? { typeId: stack.typeId, amount: stack.amount } : undefined;
-  });
-}
-
-function restoreContainer(container, snapshot) {
-  for (let slot = 0; slot < container.size; slot++) {
-    const stack = snapshot[slot];
-    container.setItem(slot, stack ? new ItemStack(stack.typeId, stack.amount) : undefined);
-  }
-}
-
-function removeExact(container, typeId, amount) {
-  let remaining = amount;
-  for (let slot = 0; slot < container.size && remaining > 0; slot++) {
-    const stack = container.getItem(slot);
-    if (!stack || stack.typeId !== typeId) continue;
-    const taken = Math.min(remaining, stack.amount);
-    remaining -= taken;
-    if (taken === stack.amount) container.setItem(slot, undefined);
-    else {
-      stack.amount -= taken;
-      container.setItem(slot, stack);
-    }
-  }
-  return remaining === 0;
 }
 
 function missingRequirement(totals, requirements) {
@@ -284,7 +255,7 @@ export function tryCommitFinalCityBuild(elder, options = undefined) {
 
   let levelWritten = true;
   try {
-    elder.setDynamicProperty(VILLAGE_LEVEL_KEY, level);
+    elder.setDynamicProperty(PROP_LEVEL, level);
   } catch (error) {
     levelWritten = false;
     safeWarning(options, `village level write failed at L${level}`);

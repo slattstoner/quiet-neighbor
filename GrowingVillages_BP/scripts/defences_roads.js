@@ -255,7 +255,7 @@ function buildRoadCells(placer, cells) {
 }
 
 /** Builds a bounded, 3-wide local road segment. No lamp posts are added inside the roadway. */
-export function buildRoadArm(dimension, origin, facing, axis, from, to) {
+function buildRoadArm(dimension, origin, facing, axis, from, to) {
   if (axis !== "forward" && axis !== "side") throw new Error(`unsupported road axis: ${axis}`);
   if (!Number.isInteger(from) || !Number.isInteger(to)) throw new Error("road endpoints must be integers");
   const min = Math.min(from, to), max = Math.max(from, to);
@@ -438,12 +438,3 @@ export function buildDefenceStage(dimension, origin, facing, stageOrLevel) {
   });
 }
 
-export function defenceBoundsIntersects(bounds, stageOrLevel) {
-  const stage = stageFor(stageOrLevel);
-  const rect = perimeterForRadius(stage.radius);
-  const outer = {
-    fMin: rect.fMin, fMax: rect.fMax,
-    sMin: rect.sMin, sMax: rect.sMax
-  };
-  return boundsOverlap(bounds, outer);
-}

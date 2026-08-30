@@ -66,24 +66,24 @@ function insideAnyRect(f, s, rects) {
 }
 
 /** Any log/stem block - a tree's trunk (or a house's log-frame corner). */
-export function isTreeLog(typeId) {
+function isTreeLog(typeId) {
   if (!typeId) return false;
   return typeId.includes("_log") || typeId === "minecraft:log" ||
          typeId === "minecraft:log2" || typeId.includes("_stem");
 }
 
 /** Tree/canopy foliage, any wood type. */
-export function isTreeLeaves(typeId) {
+function isTreeLeaves(typeId) {
   if (!typeId) return false;
   return typeId.includes("_leaves") || typeId === "minecraft:leaves" || typeId === "minecraft:leaves2";
 }
 
-export function isTreePart(typeId) {
+function isTreePart(typeId) {
   return isTreeLog(typeId) || isTreeLeaves(typeId);
 }
 
 /** Any ore block, overworld or deepslate, plus ancient debris. */
-export function isOreBlock(typeId) {
+function isOreBlock(typeId) {
   if (!typeId) return false;
   return typeId.endsWith("_ore") || typeId === "minecraft:ancient_debris";
 }
@@ -96,7 +96,7 @@ function isClearableNature(typeId) {
   return isVoidOrFoliage(typeId) || isTreePart(typeId);
 }
 
-export function isNaturalTerrain(typeId) {
+function isNaturalTerrain(typeId) {
   return TERRAIN_BLOCKS.has(typeId);
 }
 

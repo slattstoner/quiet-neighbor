@@ -335,6 +335,3 @@ export function buildCityBuilding(buildingId, dimension, origin, facing) {
   return Object.freeze(metadata);
 }
 
-export function buildCityBuildings11To15(dimension, origin, facing) {
-  return CITY_BUILDING_IDS.map((buildingId) => buildCityBuilding(buildingId, dimension, origin, facing));
-}

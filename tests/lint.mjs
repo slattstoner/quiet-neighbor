@@ -1,11 +1,19 @@
 import { world, system } from "@minecraft/server";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 
+// Resolve everything against THIS file, never the shell's working directory.
+// These paths used to be cwd-relative, so the documented `node tests/lint.mjs`
+// from the repo root crashed on a missing "./scripts" while the same file
+// passed from inside tests/ - a whole lint suite that silently only ran from
+// one directory.
+const HERE = import.meta.dirname;
+const SCRIPTS = `${HERE}/scripts`;
+
 // The packs may sit either beside this folder (source archive layout) or one
 // level up in a working checkout, so locate them rather than assuming.
-const PACK_ROOT = ["..", "../addon"].find(
+const PACK_ROOT = [`${HERE}/..`, `${HERE}/../addon`].find(
   (root) => existsSync(`${root}/GrowingVillages_BP/manifest.json`)
-) || "..";
+) || `${HERE}/..`;
 
 let failures = 0;
 function assert(cond, msg) {
@@ -51,11 +59,11 @@ console.log("\n=== early execution safety ===");
 // ---------- 2. NO TOP-LEVEL WORLD CALLS ANYWHERE ----------
 console.log("\n=== no module-scope world calls ===");
 {
-  const files = readdirSync("./scripts").filter((f) => f.endsWith(".js"));
+  const files = readdirSync(SCRIPTS).filter((f) => f.endsWith(".js"));
   const FORBIDDEN = /^\s*world\.(sendMessage|getPlayers|getDimension|getAllPlayers|getTimeOfDay|getAbsoluteTime)\s*\(/;
   let offenders = 0;
   for (const file of files) {
-    const lines = readFileSync(`./scripts/${file}`, "utf8").split("\n");
+    const lines = readFileSync(`${SCRIPTS}/${file}`, "utf8").split("\n");
     for (const [i, line] of lines.entries()) {
       // module scope = no leading indentation
       if (FORBIDDEN.test(line) && !line.startsWith(" ") && !line.startsWith("\t")) {
@@ -143,13 +151,13 @@ console.log("\n=== manifests ===");
 // no functional test using the JS mock can catch a native-only type error.
 console.log("\n=== rawtext with-array shape ===");
 {
-  const files = readdirSync("./scripts").filter((f) => f.endsWith(".js"));
+  const files = readdirSync(SCRIPTS).filter((f) => f.endsWith(".js"));
   // A translated()-style call whose second argument is an array literal
   // that itself opens with an object literal - the broken shape.
   const BROKEN_WITH_ARRAY = /\w+\([^,()]*,\s*\[\s*\{/;
   let offenders = 0;
   for (const file of files) {
-    const text = readFileSync(`./scripts/${file}`, "utf8");
+    const text = readFileSync(`${SCRIPTS}/${file}`, "utf8");
     for (const [i, line] of text.split("\n").entries()) {
       if (BROKEN_WITH_ARRAY.test(line)) {
         offenders++;
@@ -183,10 +191,10 @@ console.log("\n=== non-existent block identifiers ===");
     "minecraft:stonecutter": "minecraft:stonecutter_block",
     "minecraft:bricks": "minecraft:brick_block"
   };
-  const files = readdirSync("./scripts").filter((f) => f.endsWith(".js"));
+  const files = readdirSync(SCRIPTS).filter((f) => f.endsWith(".js"));
   let offenders = 0;
   for (const file of files) {
-    const text = readFileSync(`./scripts/${file}`, "utf8");
+    const text = readFileSync(`${SCRIPTS}/${file}`, "utf8");
     for (const [i, line] of text.split("\n").entries()) {
       // Comments explaining a past fix legitimately name the dead id.
       if (/^\s*(\/\/|\*)/.test(line)) continue;
@@ -219,10 +227,10 @@ console.log("\n=== non-existent item identifiers ===");
   const WRONG_ITEM_IDS = {
     "minecraft:map": "minecraft:empty_map"
   };
-  const files = readdirSync("./scripts").filter((f) => f.endsWith(".js"));
+  const files = readdirSync(SCRIPTS).filter((f) => f.endsWith(".js"));
   let offenders = 0;
   for (const file of files) {
-    const text = readFileSync(`./scripts/${file}`, "utf8");
+    const text = readFileSync(`${SCRIPTS}/${file}`, "utf8");
     for (const [i, line] of text.split("\n").entries()) {
       // A comment explaining the past fix legitimately names the dead id.
       if (/^\s*(\/\/|\*)/.test(line)) continue;

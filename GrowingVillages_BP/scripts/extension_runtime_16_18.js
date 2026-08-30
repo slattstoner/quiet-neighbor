@@ -8,6 +8,8 @@ import {
 } from "./progression_16_20.js";
 import { buildPlannedVillageBuilding, getPlannedBuildState } from "./planned_build_transaction.js";
 import { LAYOUT_VERSION_V2, getLayoutVersion, refreshSign } from "./village.js";
+import { countItems, inventoryContainer, removeExact, restoreContainer, snapshotContainer } from "./inventory.js";
+import { PROP_LEVEL } from "./village_state.js";
 
 /**
  * Stage 10 coordinator for L16–L18 only.
@@ -27,7 +29,6 @@ import { LAYOUT_VERSION_V2, getLayoutVersion, refreshSign } from "./village.js";
 
 export const EXTENSION_RUNTIME_LEVELS = Object.freeze([16, 17, 18]);
 export const EXTENSION_CHAPTER_KEY = "village:v2:extension:chapter";
-export const VILLAGE_LEVEL_KEY = "village:level";
 const ACTIVE_LEVELS = new Set(EXTENSION_RUNTIME_LEVELS);
 const ARC_STEP_COUNT = 3;
 
@@ -97,53 +98,6 @@ function applyStatePatch(elder, statePatch) {
     }
     return { ok: false, error };
   }
-}
-
-function inventoryContainer(player) {
-  try {
-    return player?.getComponent?.("minecraft:inventory")?.container || null;
-  } catch (error) {
-    return null;
-  }
-}
-
-function countItems(container, typeId) {
-  let total = 0;
-  for (let slot = 0; slot < container.size; slot++) {
-    const stack = container.getItem(slot);
-    if (stack?.typeId === typeId) total += stack.amount;
-  }
-  return total;
-}
-
-function snapshotContainer(container) {
-  return Array.from({ length: container.size }, (_, slot) => {
-    const stack = container.getItem(slot);
-    return stack ? { typeId: stack.typeId, amount: stack.amount } : undefined;
-  });
-}
-
-function restoreContainer(container, snapshot) {
-  for (let slot = 0; slot < container.size; slot++) {
-    const stack = snapshot[slot];
-    container.setItem(slot, stack ? new ItemStack(stack.typeId, stack.amount) : undefined);
-  }
-}
-
-function removeExact(container, typeId, amount) {
-  let remaining = amount;
-  for (let slot = 0; slot < container.size && remaining > 0; slot++) {
-    const stack = container.getItem(slot);
-    if (!stack || stack.typeId !== typeId) continue;
-    const taken = Math.min(remaining, stack.amount);
-    remaining -= taken;
-    if (taken === stack.amount) container.setItem(slot, undefined);
-    else {
-      stack.amount -= taken;
-      container.setItem(slot, stack);
-    }
-  }
-  return remaining === 0;
 }
 
 function missingRequirement(container, requirements) {
@@ -337,7 +291,7 @@ export function tryCommitExtensionBuild(elder, options = undefined) {
 
   let levelWritten = true;
   try {
-    elder.setDynamicProperty(VILLAGE_LEVEL_KEY, level);
+    elder.setDynamicProperty(PROP_LEVEL, level);
   } catch (error) {
     levelWritten = false;
     safeWarning(options, `village level write failed at L${level}`);

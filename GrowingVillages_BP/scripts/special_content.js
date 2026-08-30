@@ -1,6 +1,7 @@
 import { ItemStack, world, system } from "@minecraft/server";
 import { buildSpecialBuilding, spawnSpecialResident, ALCHEMIST_PRODUCTS, giveProduct } from "./specials.js";
 import { toWorld } from "./util.js";
+import { PROP_ID, readFacing, readLevel, readOrigin, readProperty } from "./village_state.js";
 
 export const SPECIAL_QUESTS = {
   ranger: {
@@ -59,13 +60,9 @@ function remove(container, typeId, amount) {
 function elderState(elder) {
   return {
     elder,
-    origin: {
-      x: elder.getDynamicProperty("village:originX"),
-      y: elder.getDynamicProperty("village:originY"),
-      z: elder.getDynamicProperty("village:originZ")
-    },
-    facing: elder.getDynamicProperty("village:facing"),
-    id: elder.getDynamicProperty("village:id")
+    origin: readOrigin(elder),
+    facing: readFacing(elder),
+    id: readProperty(elder, PROP_ID)
   };
 }
 
@@ -80,8 +77,8 @@ function spawnIfNeeded(elder, key, shape) {
   }
 }
 
-export function ensureSpecialBuildings(elder) {
-  const level = elder.getDynamicProperty("village:level") || 1;
+function ensureSpecialBuildings(elder) {
+  const level = readLevel(elder);
   const built = [];
   const state = elderState(elder);
   if (level >= 6 && !elder.getDynamicProperty("village:specialBuilt:alchemist")) {
@@ -95,7 +92,7 @@ export function ensureSpecialBuildings(elder) {
   return built;
 }
 
-export function getSpecialQuest(key) { return SPECIAL_QUESTS[key] || null; }
+function getSpecialQuest(key) { return SPECIAL_QUESTS[key] || null; }
 
 export function getSpecialQuestStep(oldtimer, key) {
   return oldtimer?.getDynamicProperty(`village:specialQuest:${key}`) || 0;
@@ -139,10 +136,6 @@ export function startSpecialContentLoop() {
       try { ensureSpecialBuildings(elder); } catch (e) { console.warn(`[village] special content loop: ${e}`); }
     }
   }, 100);
-}
-
-export function availableSpecialKeys(oldtimer) {
-  return Object.keys(SPECIAL_QUESTS).filter((key) => getSpecialQuestStep(oldtimer, key) < SPECIAL_QUESTS[key].chain.length);
 }
 
 export { SPECIAL_BUILDINGS } from "./specials.js";

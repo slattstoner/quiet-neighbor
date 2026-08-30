@@ -1,11 +1,12 @@
 import { chapterForLevel } from "./quest_contract_v2.js";
+import { PROP_LEVEL } from "./village_state.js";
 
 // This is intentionally a small state adapter. It has no world/UI/builder imports
 // and no module-scope side effects, so it is safe to load with the core pipeline.
 export const QUEST_STATE_SCHEMA_VERSION = 2;
 export const RUNTIME_CHAPTER_MAX_LEVEL = 10;
 
-const PROP_LEVEL = "village:level";
+
 const PROP_SCHEMA = "village:schema";
 const PROP_CHAPTER = "village:v2:chapter";
 const PROP_CHAPTER_PREFIX = "village:v2:chapter:";

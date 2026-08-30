@@ -6,7 +6,7 @@ import { BlockPermutation } from "@minecraft/server";
  * plain block, and if even that fails we fall back to air rather than
  * throwing and aborting an entire build.
  */
-export function safePermutation(typeId, states) {
+function safePermutation(typeId, states) {
   try {
     if (states) return BlockPermutation.resolve(typeId, states);
     return BlockPermutation.resolve(typeId);
@@ -17,32 +17,6 @@ export function safePermutation(typeId, states) {
       console.warn(`[village] unknown block ${typeId}, using air`);
       return BlockPermutation.resolve("minecraft:air");
     }
-  }
-}
-
-/**
- * Tries several alternative block-state schemes in order and returns the
- * first one the engine actually accepts.
- *
- * This matters because Mojang renames vanilla block states between
- * versions - doors, for instance, moved from an integer "direction" state
- * to a string "minecraft:cardinal_direction" state in 1.21.60. Without
- * this, an outdated scheme silently falls back to a default-oriented
- * block, which is how the doors ended up broken.
- */
-export function resolveFirst(typeId, stateCandidates) {
-  for (const states of stateCandidates) {
-    try {
-      return BlockPermutation.resolve(typeId, states);
-    } catch (e) {
-      /* try the next scheme */
-    }
-  }
-  try {
-    return BlockPermutation.resolve(typeId);
-  } catch (e) {
-    console.warn(`[village] unknown block ${typeId}, using air`);
-    return BlockPermutation.resolve("minecraft:air");
   }
 }
 
@@ -141,30 +115,6 @@ export function fillBox(dimension, x1, y1, z1, x2, y2, z2, typeId, states) {
           }
         } catch (e) {
           /* unloaded chunk edge - skip */
-        }
-      }
-    }
-  }
-}
-
-/** Hollow box: floor+walls+ceiling only, leaving the inside as air. */
-export function fillHollowBox(dimension, x1, y1, z1, x2, y2, z2, typeId, states, floorTypeId) {
-  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
-  const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
-  const minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
-  const wallPerm = safePermutation(typeId, states);
-  const floorPerm = safePermutation(floorTypeId || typeId, states);
-  for (let x = minX; x <= maxX; x++) {
-    for (let y = minY; y <= maxY; y++) {
-      for (let z = minZ; z <= maxZ; z++) {
-        const isFloor = y === minY;
-        const isEdge = x === minX || x === maxX || z === minZ || z === maxZ || y === maxY;
-        if (!isFloor && !isEdge) continue;
-        try {
-          const block = dimension.getBlock({ x, y, z });
-          if (block) block.setPermutation(isFloor ? floorPerm : wallPerm);
-        } catch (e) {
-          /* skip */
         }
       }
     }
