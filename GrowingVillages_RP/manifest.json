@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "Growing Villages [BETA] - Resources",
-    "description": "Ресурс-пак для мода Растущие деревни. Использует ванильные текстуры.",
+    "description": "Ресурс-пак для мода Растущие деревни. Ванильные текстуры плюс иконка Разведочной грамоты.",
     "uuid": "d954e84b-467c-4fab-adca-07b5f2bbf223",
     "version": [
       0,
-      5,
-      6
+      10,
+      0
     ],
     "min_engine_version": [
       1,
@@ -21,8 +21,8 @@
       "uuid": "5c86f61c-75eb-41d0-977e-89dcf8f05fe6",
       "version": [
         0,
-        5,
-        6
+        10,
+        0
       ]
     }
   ]
