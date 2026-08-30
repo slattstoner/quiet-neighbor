@@ -48,7 +48,7 @@ const TERRAIN_BLOCKS = new Set([
   "minecraft:tuff", "minecraft:deepslate", "minecraft:cobbled_deepslate",
   "minecraft:sand", "minecraft:red_sand", "minecraft:sandstone", "minecraft:red_sandstone",
   "minecraft:gravel", "minecraft:clay",
-  "minecraft:hardened_clay", "minecraft:terracotta", "minecraft:snow_block",
+  "minecraft:hardened_clay", "minecraft:snow",
   "minecraft:ice", "minecraft:packed_ice", "minecraft:blue_ice"
 ]);
 

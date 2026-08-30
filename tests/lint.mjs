@@ -189,7 +189,10 @@ console.log("\n=== non-existent block identifiers ===");
     "minecraft:oak_pressure_plate": "minecraft:wooden_pressure_plate",
     "minecraft:oak_standing_sign": "minecraft:standing_sign",
     "minecraft:stonecutter": "minecraft:stonecutter_block",
-    "minecraft:bricks": "minecraft:brick_block"
+    "minecraft:bricks": "minecraft:brick_block",
+    "minecraft:terracotta": "minecraft:hardened_clay",
+    "minecraft:oak_door": "minecraft:wooden_door",
+    "minecraft:stone_slab": "minecraft:smooth_stone_slab"
   };
   const files = readdirSync(SCRIPTS).filter((f) => f.endsWith(".js"));
   let offenders = 0;

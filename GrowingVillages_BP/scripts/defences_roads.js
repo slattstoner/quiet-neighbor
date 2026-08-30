@@ -35,7 +35,11 @@ const TIER_STYLE = Object.freeze({
     foundation: "minecraft:cobblestone",
     cap: "minecraft:cobblestone_wall",
     tower: "minecraft:cobblestone",
-    towerTop: "minecraft:stone_slab",
+    // Bedrock flattened the old "stone_slab" id away; smooth_stone_slab is
+    // the modern block that id used to render as. The castle tier below
+    // already uses a real slab id (stone_brick_slab) - this tier did not, so
+    // cobble-tier towers were left open-topped.
+    towerTop: "minecraft:smooth_stone_slab",
     gate: "minecraft:stone_bricks",
     accent: "minecraft:spruce_log",
     height: 6,
