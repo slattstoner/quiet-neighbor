@@ -423,7 +423,12 @@ function raiseCrossroadsDefences(elder, state, nextLevel, stageLevel) {
   const plan = planDefenceStage(stageLevel);
   const previous = previousDefenceStage(stageLevel);
   const protectedRects = builtPlotFootprints(nextLevel, state.layoutVersion);
-  const reach = plan.radius + 4;
+  // Six blocks past the ring, not four: the wall reads the ground it will
+  // stand on from columns up to five blocks outside its own line
+  // (defences_roads.js#PROFILE_SAMPLE_OFFSETS), and a sample taken in a chunk
+  // that is not loaded comes back empty and flattens that stretch of wall back
+  // onto the platform. Still a 2x2 grid of ticking areas at R94.
+  const reach = plan.radius + 6;
   const rect = { fMin: -reach, fMax: reach, sMin: -reach, sMax: reach };
   const release = holdLoadedArea(dimension, state.origin, state.facing, rect);
 
@@ -432,12 +437,19 @@ function raiseCrossroadsDefences(elder, state, nextLevel, stageLevel) {
       if (previous) {
         yield* clearStageRingJob(dimension, state.origin, state.facing, previous.level, protectedRects);
       }
-      yield* buildDefenceStageJob(dimension, state.origin, state.facing, stageLevel);
+      // The wall follows the ground now, so how high a tower's floor ended up
+      // is only known once the build has read the terrain. It hands that back
+      // through the job's return value; without it a guard would be spawned at
+      // the old platform height and drop out of, or suffocate inside, a tower
+      // the hillside had lifted.
+      const built = yield* buildDefenceStageJob(dimension, state.origin, state.facing, stageLevel);
+      const towerBases = built?.towerBases || {};
 
       // Staffing happens inside the job, after the stone is down: a guard
       // spawned into a tower that does not exist yet falls to the ground.
       for (const tower of plan.towers) {
-        const at = toWorld(state.origin, state.facing, tower.standAt.f, tower.standAt.s, tower.standAt.up);
+        const base = Number.isInteger(towerBases[tower.id]) ? towerBases[tower.id] : 0;
+        const at = toWorld(state.origin, state.facing, tower.standAt.f, tower.standAt.s, tower.standAt.up + base);
         // Spawn and patrol assignment are one retried unit: a guard that
         // spawned but never got its route would stand in its tower forever
         // with no sign anything was wrong.

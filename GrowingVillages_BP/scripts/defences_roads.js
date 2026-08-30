@@ -7,6 +7,8 @@ import {
   scheduleForLevel
 } from "./spatial_plan.js";
 import { makePlacer, stairs } from "./builder.js";
+import { groundUpAt, smoothProfile, underpinColumn } from "./terrain.js";
+import { toWorld } from "./util.js";
 
 /**
  * Detached defensive-road foundation for the approved R44/R62/R78/R94 plan.
@@ -246,6 +248,176 @@ function innerCell(cell, radius) {
 const TERRAIN_SLICE = 40;   // ~14 calls per cell
 const ROAD_SLICE = 100;     // 5 calls per cell
 const CURTAIN_SLICE = 30;   // ~18 calls per cell
+const PROFILE_SLICE = 3;    // three deep ground probes per cell
+const FOOTING_SLICE = 8;    // a ground probe plus a column of fill per cell
+// Demolition is the heaviest sweep of all - a band five cells wide, cleared
+// top to bottom - so it hands the tick back four times as often as the build
+// loops do. It used to share CURTAIN_SLICE and ran to some 2,000 native calls
+// in a single slice, which is the shape of spike the watchdog kills a script
+// runtime for; a half-run demolition leaves half an old wall standing inside
+// the new one.
+const DEMOLITION_SLICE = 8;
+
+/**
+ * How far the wall is allowed to climb or drop away from the village
+ * platform. A village that needs more than this is on a mountainside, and a
+ * curtain that chased it would put a tower's roof in the clouds; past the
+ * limit the wall levels off and the foundation under it does the rest.
+ */
+const PROFILE_LIMIT = 16;
+
+/**
+ * How far out the ground is sampled to decide what height a wall cell stands
+ * at. Three blocks clear of the curtain line is past everything the village
+ * ever writes - the demolition band either side of a ring reaches two - so
+ * the profile a stage is built from is the same profile the next stage's
+ * demolition computes, years of play later. Three offsets, taken as a median,
+ * so one boulder or one stump can't tip the wall a block out of line.
+ */
+const PROFILE_SAMPLE_OFFSETS = Object.freeze([3, 4, 5]);
+
+/** How deep a foundation may reach for solid ground before giving up. */
+const FOOTING_DEPTH = 24;
+
+/**
+ * Every cell of the curtain ring, in one closed loop from corner to corner.
+ *
+ * Ring *order* is what makes the ground profile below work: smoothing a wall
+ * so it climbs no faster than a block at a time only means anything if the
+ * cells are walked the way the wall runs, and the loop closes so a hill
+ * sitting on a corner lifts both of the walls that meet there.
+ */
+function ringLoopCells(radius) {
+  const cells = [];
+  for (let f = -radius; f <= radius; f++) cells.push({ f, s: -radius });
+  for (let s = -radius + 1; s <= radius; s++) cells.push({ f: radius, s });
+  for (let f = radius - 1; f >= -radius; f--) cells.push({ f, s: radius });
+  for (let s = radius - 1; s >= -radius + 1; s--) cells.push({ f: -radius, s });
+  return cells;
+}
+
+/** Which way is "out of the village" from a ring cell; diagonal on a corner. */
+function outwardStep(cell, radius) {
+  return {
+    f: cell.f === radius ? 1 : cell.f === -radius ? -1 : 0,
+    s: cell.s === radius ? 1 : cell.s === -radius ? -1 : 0
+  };
+}
+
+function clampProfile(value) {
+  return Math.max(-PROFILE_LIMIT, Math.min(PROFILE_LIMIT, value));
+}
+
+function medianOf(values) {
+  const sorted = values.slice().sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+/**
+ * The height each cell of the wall is built at, sampled from the ground it
+ * actually stands on.
+ *
+ * The whole point of the fortification used to be a single flat platform
+ * height: every wall cell was laid at the village's own `up 0`, and the
+ * narrow terrain pass cut whatever ground was in the way down to it. On the
+ * flat that is invisible. On a slope - which is most of a 94-block ring - it
+ * produced both of the things this replaces: on the high side the wall was
+ * buried to its parapet in the hillside with a trench cut round it, and on
+ * the low side it hung in the air on a single block of foundation with an
+ * open gap underneath.
+ *
+ * So the wall is laid ON the ground instead: each cell starts at its own
+ * surface, the run is smoothed so it never climbs more than a block at a time
+ * (see smoothProfile - it only ever raises, so the wall is never dragged back
+ * down into a hill), and every column is carried down to solid ground by
+ * footingJob so nothing is left hanging over a hole.
+ *
+ * Gate cells and their piers are pinned to the platform: the road through
+ * them is a levelled causeway and a gatehouse has to meet it.
+ */
+function* stageProfileJob(dimension, origin, facing, stage) {
+  const radius = stage.radius;
+  const cells = ringLoopCells(radius);
+  const pinned = new Set();
+  for (const gate of gateOpeningCells(stage)) {
+    for (const cell of [...gate.cells, ...gatePierCells(gate)]) pinned.add(`${cell.f},${cell.s}`);
+  }
+
+  const raw = new Array(cells.length);
+  let probed = 0;
+  for (let index = 0; index < cells.length; index++) {
+    const cell = cells[index];
+    if (pinned.has(`${cell.f},${cell.s}`)) {
+      raw[index] = 0;
+      continue;
+    }
+    const step = outwardStep(cell, radius);
+    const samples = [];
+    for (const distance of PROFILE_SAMPLE_OFFSETS) {
+      const up = groundUpAt(dimension, origin, facing, cell.f + step.f * distance, cell.s + step.s * distance, 24);
+      if (Number.isInteger(up)) samples.push(clampProfile(up));
+    }
+    // No ground anywhere in the band means an unloaded chunk or a void, and
+    // guessing a height there would put a kink in the wall for no reason.
+    raw[index] = samples.length ? medianOf(samples) : 0;
+    // Counted on cells actually probed, not on the loop index: a pinned run
+    // costs nothing and must not carry its share of the budget over into the
+    // next slice.
+    if (++probed % PROFILE_SLICE === 0) yield;
+  }
+
+  const smoothed = smoothProfile(raw, 1, true);
+  const heights = new Map();
+  for (let index = 0; index < cells.length; index++) {
+    const cell = cells[index];
+    // Pinned cells are re-pinned after smoothing, not just before it. The
+    // smoothing raises, so a gate cut into a hillside would otherwise be
+    // lifted several blocks by the high ground either side of it - and the
+    // gatehouse would then stand in the air over the road it is meant to
+    // straddle, with the passage floor above the causeway.
+    const pin = pinned.has(`${cell.f},${cell.s}`);
+    heights.set(`${cell.f},${cell.s}`, pin ? 0 : smoothed[index]);
+  }
+  return makeProfile(stage, heights);
+}
+
+/**
+ * A profile every builder below can ask two questions of: the height of a
+ * given ring cell, and the height any structural cell belongs to.
+ *
+ * The second one is what keeps a stage in one piece. The walkway a block
+ * inside the curtain has to start where its own wall cell starts, and all
+ * twenty-five cells of a corner tower have to start where the corner does, or
+ * the tower ends up a step off the wall it is supposed to anchor.
+ */
+function makeProfile(stage, heights) {
+  const radius = stage.radius;
+  const towers = towerFootprintsForStage(stage);
+  const at = (f, s) => {
+    const found = heights.get(`${f},${s}`);
+    return Number.isInteger(found) ? found : 0;
+  };
+  return {
+    radius,
+    at,
+    baseAt(f, s) {
+      for (const tower of towers) {
+        const bounds = tower.bounds;
+        if (f >= bounds.fMin && f <= bounds.fMax && s >= bounds.sMin && s <= bounds.sMax) {
+          return at(tower.corner.f, tower.corner.s);
+        }
+      }
+      if (Math.abs(f) === radius || Math.abs(s) === radius) return at(f, s);
+      // One step inside the curtain: the walkway line. Anything further in is
+      // road, and the roads stay on the levelled platform.
+      const ringF = f === radius - 1 ? radius : f === -(radius - 1) ? -radius : f;
+      const ringS = s === radius - 1 ? radius : s === -(radius - 1) ? -radius : s;
+      if (Math.abs(ringF) === radius || Math.abs(ringS) === radius) return at(ringF, ringS);
+      return 0;
+    },
+    towerBases: Object.fromEntries(towers.map((tower) => [tower.id, at(tower.corner.f, tower.corner.s)]))
+  };
+}
 
 function dedupeCells(cells) {
   const seen = new Set();
@@ -259,12 +431,57 @@ function dedupeCells(cells) {
   return freezeCells(out);
 }
 
-function* narrowTerrainClearJob(placer, cells, maxUp, foundation) {
+/**
+ * Clears the narrow strip a stage is about to build on.
+ *
+ * Each cell is cleared from its OWN base upward rather than from the village
+ * platform, which is the difference between a wall laid on the ground and a
+ * wall standing in a trench cut through it: the hillside a cell sits on is
+ * left exactly as it is, and only what would be inside the finished wall -
+ * snow, grass, a tree in the way - is taken out.
+ */
+function* narrowTerrainClearJob(placer, cells, maxUp, foundation, profile) {
   let done = 0;
   for (const cell of cells) {
-    placer.block(cell.f, cell.s, -1, foundation);
-    for (let up = 0; up <= maxUp; up++) placer.block(cell.f, cell.s, up, "minecraft:air");
+    const base = profile.baseAt(cell.f, cell.s);
+    placer.block(cell.f, cell.s, base - 1, foundation);
+    for (let up = base; up <= base + maxUp; up++) placer.block(cell.f, cell.s, up, "minecraft:air");
     if (++done % TERRAIN_SLICE === 0) yield;
+  }
+}
+
+/**
+ * Carries every column the stage stands on down to solid ground.
+ *
+ * This is the fix for the gap under the wall. The narrow clear above lays a
+ * single block of foundation under each cell; wherever the ground had fallen
+ * away below that block there was nothing under it at all, so the wall stood
+ * on a one-block ledge with an open hole beneath - and the same held for the
+ * road causeway and the gate floor. Every structural column now reaches real
+ * ground, whether that is one block down or twenty.
+ */
+function* footingJob(dimension, origin, facing, stage, profile, foundation) {
+  const radius = stage.radius;
+  const columns = [];
+  for (const cell of wallCellsForStage(stage)) {
+    columns.push(cell);
+    columns.push(innerCell(cell, radius));
+  }
+  for (const gate of gateOpeningCells(stage)) {
+    for (const cell of [...gate.cells, ...gatePierCells(gate)]) columns.push(cell);
+  }
+  for (const tower of towerFootprintsForStage(stage)) {
+    for (let f = tower.bounds.fMin; f <= tower.bounds.fMax; f++) {
+      for (let s = tower.bounds.sMin; s <= tower.bounds.sMax; s++) columns.push({ f, s });
+    }
+  }
+  for (const cell of roadCellsForRadius(radius)) columns.push(cell);
+
+  let done = 0;
+  for (const cell of dedupeCells(columns)) {
+    underpinColumn(dimension, origin, facing, cell.f, cell.s,
+      profile.baseAt(cell.f, cell.s) - 2, foundation, FOOTING_DEPTH);
+    if (++done % FOOTING_SLICE === 0) yield;
   }
 }
 
@@ -293,30 +510,34 @@ function roadArmPlan(axis, from, to) {
   return Object.freeze({ axis, from: min, to: max, width: half * 2 + 1, bounds: Object.freeze(localBoundsFromCells(cells)), cells: freezeCells(cells) });
 }
 
-function* curtainJob(placer, stage) {
+function* curtainJob(placer, stage, profile) {
   const style = styleFor(stage.tier);
   const cells = wallCellsForStage(stage);
   let done = 0;
   for (const cell of cells) {
-    placer.box(cell.f, cell.s, 0, cell.f, cell.s, style.height - 1, style.wall);
+    // Every height below is measured from the ground this cell stands on, not
+    // from the village platform, so the wall rides the relief instead of
+    // cutting through it.
+    const base = profile.at(cell.f, cell.s);
+    placer.box(cell.f, cell.s, base, cell.f, cell.s, base + style.height - 1, style.wall);
     if (style.family === "palisade") {
       const tall = (cell.f + cell.s) % 2 === 0;
-      if (tall) placer.block(cell.f, cell.s, style.height, style.cap);
+      if (tall) placer.block(cell.f, cell.s, base + style.height, style.cap);
     } else if (style.family === "cobble") {
-      placer.block(cell.f, cell.s, style.height, style.cap);
+      placer.block(cell.f, cell.s, base + style.height, style.cap);
     } else {
       if ((cell.f + cell.s) % 2 === 0) {
-        placer.block(cell.f, cell.s, style.height, style.wall);
-        placer.block(cell.f, cell.s, style.height + 1, style.cap);
+        placer.block(cell.f, cell.s, base + style.height, style.wall);
+        placer.block(cell.f, cell.s, base + style.height + 1, style.cap);
       } else if ((cell.f + cell.s) % 6 === 0) {
         // Arrow slit; the continuous wall remains solid below this level.
-        placer.block(cell.f, cell.s, style.height - 2, "minecraft:air");
+        placer.block(cell.f, cell.s, base + style.height - 2, "minecraft:air");
       }
     }
     const inner = innerCell(cell, stage.radius);
     if (style.family !== "palisade") {
-      placer.box(inner.f, inner.s, 0, inner.f, inner.s, style.height - 2, style.foundation);
-      placer.block(inner.f, inner.s, style.height - 1, style.wall);
+      placer.box(inner.f, inner.s, base, inner.f, inner.s, base + style.height - 2, style.foundation);
+      placer.block(inner.f, inner.s, base + style.height - 1, style.wall);
     } else {
       // A continuous plank fighting-walk, one block in from the stockade and
       // low enough that the palisade covers whoever stands on it. It used to
@@ -324,24 +545,36 @@ function* curtainJob(placer, stage) {
       // quarters of a hole, and a watchman sent along it would have walked
       // into thin air. walls.js's own palisade has always laid this
       // continuously (its walkUp), so this matches rather than invents.
-      placer.block(inner.f, inner.s, style.height - 2, "minecraft:oak_planks");
+      placer.block(inner.f, inner.s, base + style.height - 2, "minecraft:oak_planks");
     }
     if (++done % CURTAIN_SLICE === 0) yield;
   }
 }
 
-function buildTower(placer, footprint, stage) {
+/**
+ * One corner watchtower.
+ *
+ * The 5x5 footprint is anchored ON the corner and reaches inward, so the
+ * tower's two outer faces ARE the two curtain lines that meet there - it
+ * stands in the corner of the wall rather than beside it or beyond it (see
+ * towerFootprintsForStage). It is raised from the same base as that corner
+ * cell, so on a slope the tower and both walls running out of it start at one
+ * height instead of the wall sinking into the hill while the tower stays up
+ * on the old platform level, which is what made them read as detached.
+ */
+function buildTower(placer, footprint, stage, profile) {
   const style = styleFor(stage.tier);
   const { fMin, fMax, sMin, sMax } = footprint.bounds;
-  const top = style.towerHeight - 1;
-  placer.box(fMin, sMin, 0, fMax, sMax, top, style.tower);
-  placer.box(fMin + 1, sMin + 1, 0, fMax - 1, sMax - 1, top - 1, "minecraft:air");
+  const base = profile.at(footprint.corner.f, footprint.corner.s);
+  const top = base + style.towerHeight - 1;
+  placer.box(fMin, sMin, base, fMax, sMax, top, style.tower);
+  placer.box(fMin + 1, sMin + 1, base, fMax - 1, sMax - 1, top - 1, "minecraft:air");
   // A real, compact entrance from the interior-facing diagonal.
   const doorF = footprint.corner.f < 0 ? fMax : fMin;
   const doorS = footprint.corner.s < 0 ? sMax : sMin;
-  placer.box(doorF, doorS, 0, doorF, doorS, 1, "minecraft:air");
+  placer.box(doorF, doorS, base, doorF, doorS, base + 1, "minecraft:air");
   // Ladder and a visible watch platform create a readable defensive silhouette.
-  placer.box(fMin + 1, sMin + 1, 0, fMin + 1, sMin + 1, top - 1, "minecraft:ladder");
+  placer.box(fMin + 1, sMin + 1, base, fMin + 1, sMin + 1, top - 1, "minecraft:ladder");
   placer.box(fMin + 1, sMin + 1, top, fMax - 1, sMax - 1, top, style.towerTop);
   if (style.family === "castle") {
     for (let f = fMin; f <= fMax; f++) {
@@ -386,27 +619,34 @@ function gatePierCells(gate) {
     : { f: offset, s: gate.bounds.sMin });
 }
 
-function buildGatehouse(placer, gate, stage) {
+/**
+ * A gatehouse stands at the road's own level, not the ground's: the road
+ * through it is a levelled causeway from one side of the village to the other,
+ * so its opening, piers and arch are all raised from the one base the profile
+ * pins those cells to (see stageProfileJob).
+ */
+function buildGatehouse(placer, gate, stage, profile) {
   const style = styleFor(stage.tier);
   const piers = gatePierCells(gate);
+  const base = profile.at(gate.cells[0].f, gate.cells[0].s);
   for (const pier of piers) {
-    placer.box(pier.f, pier.s, 0, pier.f, pier.s, style.gateHeight + 1, style.gate);
-    placer.block(pier.f, pier.s, style.gateHeight + 2, "minecraft:lantern", { hanging: false });
+    placer.box(pier.f, pier.s, base, pier.f, pier.s, base + style.gateHeight + 1, style.gate);
+    placer.block(pier.f, pier.s, base + style.gateHeight + 2, "minecraft:lantern", { hanging: false });
   }
   // Arch and optional high grille sit strictly above the required 4-block passage.
   for (const cell of gate.cells) {
-    placer.block(cell.f, cell.s, style.gateHeight, style.gate);
+    placer.block(cell.f, cell.s, base + style.gateHeight, style.gate);
     if (style.family === "castle") {
-      placer.block(cell.f, cell.s, style.gateHeight + 1, "minecraft:iron_bars");
+      placer.block(cell.f, cell.s, base + style.gateHeight + 1, "minecraft:iron_bars");
       if (cell.f === gate.cells[0].f && cell.s === gate.cells[0].s) {
-        stairs(placer, cell.f, cell.s, style.gateHeight + 2, "minecraft:stone_brick_stairs", outwardCompass(placer.facing, gate.edge), false);
+        stairs(placer, cell.f, cell.s, base + style.gateHeight + 2, "minecraft:stone_brick_stairs", outwardCompass(placer.facing, gate.edge), false);
       }
     } else if (style.family === "cobble") {
-      placer.block(cell.f, cell.s, style.gateHeight + 1, "minecraft:stone_brick_slab");
+      placer.block(cell.f, cell.s, base + style.gateHeight + 1, "minecraft:stone_brick_slab");
     } else {
-      placer.block(cell.f, cell.s, style.gateHeight + 1, "minecraft:oak_fence");
+      placer.block(cell.f, cell.s, base + style.gateHeight + 1, "minecraft:oak_fence");
     }
-    for (let up = 0; up <= 3; up++) placer.block(cell.f, cell.s, up, "minecraft:air");
+    for (let up = base; up <= base + 3; up++) placer.block(cell.f, cell.s, up, "minecraft:air");
   }
 }
 
@@ -449,6 +689,11 @@ function ensureActiveAllocationsClear(stage) {
  * the parapet the first time a tier's height changed. Palisade guards stand on
  * the plank walk with the stockade still above them; on the stone tiers the
  * inner line is solid to height-1, so the walking surface is its top.
+ *
+ * `standUp` is the height the walk has on level ground. The wall rides the
+ * relief now (see stageProfileJob), so the ground decides the rest of it, and
+ * the patrol reads the actual height out of the world one column at a time
+ * (patrol.js#walkSurfaceY) rather than carrying a profile around with it.
  */
 export function wallWalkFor(stageOrLevel) {
   const stage = stageFor(stageOrLevel);
@@ -501,7 +746,14 @@ export function* clearStageRingJob(dimension, origin, facing, stageOrLevel, prot
   const stage = stageFor(stageOrLevel);
   const style = styleFor(stage.tier);
   const placer = makePlacer(dimension, origin, facing);
-  const height = style.towerHeight + 3;
+  // The old wall followed the ground, so the demolition has to as well - a
+  // sweep from the platform up would leave whatever the hillside had lifted
+  // above it standing. The profile is read from ground the village never
+  // writes to, so this recovers the heights the stage was built at; the extra
+  // blocks above and the one below absorb any drift since.
+  const profile = yield* stageProfileJob(dimension, origin, facing, stage);
+  yield;
+  const height = style.towerHeight + 4;
   const positions = [...wallCellsForStage(stage), ...gateOpeningCells(stage).flatMap((gate) => [...gate.cells, ...gatePierCells(gate)])];
   let done = 0;
   for (const pos of positions) {
@@ -512,18 +764,59 @@ export function* clearStageRingJob(dimension, origin, facing, stageOrLevel, prot
       const f = edge === "sMin" || edge === "sMax" ? pos.f : pos.f + d;
       const s = edge === "sMin" || edge === "sMax" ? pos.s + d : pos.s;
       if (insideAnyRect(f, s, protectedRects)) continue;
-      for (let up = 0; up <= height; up++) placer.block(f, s, up, "minecraft:air");
+      const base = profile.baseAt(pos.f, pos.s);
+      for (let up = base - 1; up <= base + height; up++) placer.block(f, s, up, "minecraft:air");
     }
-    if (++done % CURTAIN_SLICE === 0) yield;
+    if (++done % DEMOLITION_SLICE === 0) yield;
   }
   for (const tower of towerFootprintsForStage(stage)) {
+    const base = profile.at(tower.corner.f, tower.corner.s);
     for (let f = tower.bounds.fMin; f <= tower.bounds.fMax; f++) {
       for (let s = tower.bounds.sMin; s <= tower.bounds.sMax; s++) {
         if (insideAnyRect(f, s, protectedRects)) continue;
-        for (let up = 0; up <= height; up++) placer.block(f, s, up, "minecraft:air");
+        for (let up = base - 1; up <= base + height; up++) placer.block(f, s, up, "minecraft:air");
       }
+      yield;
     }
-    yield;
+  }
+
+  // And the plinth. Where the old wall crossed a dip it was stood on a column
+  // of its own foundation reaching down to the ground (footingJob); clearing
+  // only the wall itself would leave that column behind as a stub sticking out
+  // of the ground all the way round the old line. Peeling stops at the first
+  // block that is not one of this stage's own materials, so it can take its
+  // own footing out without cutting into the ground under it.
+  yield;
+  const ownMaterials = new Set([style.wall, style.foundation, style.cap, style.tower, style.towerTop, style.gate, style.accent]);
+  const footings = [];
+  for (const cell of wallCellsForStage(stage)) {
+    footings.push(cell);
+    footings.push(innerCell(cell, stage.radius));
+  }
+  for (const tower of towerFootprintsForStage(stage)) {
+    for (let f = tower.bounds.fMin; f <= tower.bounds.fMax; f++) {
+      for (let s = tower.bounds.sMin; s <= tower.bounds.sMax; s++) footings.push({ f, s });
+    }
+  }
+  done = 0;
+  for (const cell of dedupeCells(footings)) {
+    if (insideAnyRect(cell.f, cell.s, protectedRects)) continue;
+    peelFooting(placer, cell.f, cell.s, profile.baseAt(cell.f, cell.s) - 2, ownMaterials);
+    if (++done % DEMOLITION_SLICE === 0) yield;
+  }
+}
+
+/**
+ * Removes a demolished wall's own foundation column, block by block, and stops
+ * the moment it reaches something it did not put there.
+ */
+function peelFooting(placer, f, s, fromUp, materials) {
+  for (let up = fromUp; up >= fromUp - FOOTING_DEPTH; up--) {
+    const at = toWorld(placer.origin, placer.facing, f, s, up);
+    let typeId = null;
+    try { typeId = placer.dimension.getBlock(at)?.typeId; } catch (error) { return; }
+    if (!materials.has(typeId)) return;
+    placer.block(f, s, up, "minecraft:air");
   }
 }
 
@@ -581,18 +874,37 @@ export function* buildDefenceStageJob(dimension, origin, facing, stageOrLevel) {
   ensureActiveAllocationsClear(stage);
   const placer = makePlacer(dimension, origin, facing);
 
-  yield* narrowTerrainClearJob(placer, dedupeCells(stageTerrainCells(stage)), style.towerHeight + 2, style.foundation);
+  // Read the ground first: everything below is placed relative to what this
+  // finds, so nothing can be laid at a height the profile has not seen.
+  const profile = yield* stageProfileJob(dimension, origin, facing, stage);
+
+  // A yield between phases, not just inside them: a generator delegated to
+  // with yield* does not yield on the way out, so the tail of one phase and
+  // the head of the next used to land in the same tick and add up to nearly
+  // twice a single phase's slice.
+  yield;
+  yield* narrowTerrainClearJob(placer, dedupeCells(stageTerrainCells(stage)), style.towerHeight + 2, style.foundation, profile);
+  yield;
   yield* roadCellsJob(placer, roadArmPlan("forward", -stage.radius, stage.radius).cells);
+  yield;
   yield* roadCellsJob(placer, roadArmPlan("side", -stage.radius, stage.radius).cells);
-  yield* curtainJob(placer, stage);
+  yield;
+  yield* footingJob(dimension, origin, facing, stage, profile, style.foundation);
+  yield;
+  yield* curtainJob(placer, stage, profile);
+  yield;
   for (const gate of gateOpeningCells(stage)) {
-    buildGatehouse(placer, gate, stage);
+    buildGatehouse(placer, gate, stage, profile);
     yield;
   }
   for (const tower of towerFootprintsForStage(stage)) {
-    buildTower(placer, tower, stage);
+    buildTower(placer, tower, stage, profile);
     yield;
   }
+  // Handed back through yield* so the caller can staff a tower whose floor is
+  // wherever the hillside put it, instead of at a platform height that is only
+  // right on flat ground.
+  return Object.freeze({ towerBases: Object.freeze({ ...profile.towerBases }) });
 }
 
 /**

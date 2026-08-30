@@ -15,11 +15,12 @@ import { setHome } from "./npc.js";
  *
  * That would normally mean writing a pathfinder to decide where the next step
  * can go. Here it does not, and that is the whole reason patrols are on the
- * wall rather than through the streets: a wall-walk is a straight line at one
- * constant height with nothing on it. The next waypoint is always one block
- * along, always at the same `up`, and always known to be solid, because the
- * same module that builds the walk reports where it is (wallWalkFor). No
- * search, no obstacle handling, no falling off.
+ * wall rather than through the streets: a wall-walk is a straight line with
+ * nothing on it. The next waypoint is always one block along, and the module
+ * that builds the walk reports where its line is (wallWalkFor). The walk now
+ * rides the ground rather than holding one height, so the only thing left to
+ * work out per step is how high this column's rampart came out - one probe
+ * (walkSurfaceY), no search, no obstacle handling, no falling off.
  *
  * Cost is deliberately near zero when nobody is watching: a village whose
  * guards nobody can see does not step at all.
@@ -48,6 +49,13 @@ const WATCH_DISTANCE = 64;
 // five cells wide (|offset| <= 2) and has no walk across it - stopping clear
 // of it is what keeps the route on solid blocks without any gap handling.
 const GATE_CLEARANCE = 4;
+
+// How far above and below a waypoint's nominal height the real rampart may
+// be. The wall is laid on the ground now rather than on one flat platform
+// (defences_roads.js#stageProfileJob), so wallWalkFor's standUp is the height
+// the walk has on the level and the ground decides the rest; the profile is
+// capped at PROFILE_LIMIT either way, and this covers it with room to spare.
+const WALK_SEARCH = 18;
 
 /**
  * The waypoints for one tower's route, in local village coordinates.
@@ -140,7 +148,8 @@ export function stepPatrol(guard) {
 
   const point = route[index];
   const at = toWorld(state.origin, state.facing, point.f, point.s, point.up);
-  const destination = { x: at.x + 0.5, y: at.y, z: at.z + 0.5 };
+  const surfaceY = walkSurfaceY(guard.dimension, at);
+  const destination = { x: at.x + 0.5, y: surfaceY === null ? at.y : surfaceY, z: at.z + 0.5 };
 
   // The tether would treat a walking guard as one that has wandered off and
   // teleport it back to its tower mid-route, so a guard on patrol is not
@@ -166,6 +175,33 @@ export function stepPatrol(guard) {
   guard.setDynamicProperty(PROP_INDEX, index);
   guard.setDynamicProperty(PROP_DIR, direction);
   return { moved: true, index, direction, local: point, at: destination };
+}
+
+/**
+ * The height a watchman actually stands at in one column of its route: the
+ * topmost air block with something solid under it, found by searching down
+ * from well above the nominal walk.
+ *
+ * A route is still a straight line one block at a time, but it is no longer a
+ * line at one constant height - a wall that rides the relief climbs with it.
+ * Rather than teach the patrol the wall's ground profile, it asks the wall
+ * where its own top is, one column at a time. Returns null when the answer
+ * cannot be read (an unloaded chunk), and the caller falls back to the nominal
+ * height, which is what the walk has on level ground.
+ */
+function walkSurfaceY(dimension, at) {
+  if (!dimension) return null;
+  for (let y = at.y + WALK_SEARCH; y >= at.y - WALK_SEARCH; y--) {
+    let here, below;
+    try {
+      here = dimension.getBlock({ x: at.x, y, z: at.z })?.typeId;
+      below = dimension.getBlock({ x: at.x, y: y - 1, z: at.z })?.typeId;
+    } catch (error) {
+      return null;
+    }
+    if ((!here || here === "minecraft:air") && below && below !== "minecraft:air") return y;
+  }
+  return null;
 }
 
 /** Re-anchors a guard where it is and hands it back to the tether. */

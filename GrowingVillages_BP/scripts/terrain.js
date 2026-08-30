@@ -645,3 +645,88 @@ export function supportWallFoundation(dimension, origin, facing, forward, side, 
     }
   }
 }
+
+/**
+ * The local `up` a block laid ON the natural ground in this column would sit
+ * at: one above the highest solid block. Snow layers, grass, leaves, logs and
+ * water are all skipped (see NOT_GROUND), so the answer is the same in a
+ * blizzard as it is in summer, and the same before and after a tree grows.
+ *
+ * Returns null when the search band holds no ground at all - an unloaded
+ * chunk, or a column over open air - so a caller can tell "the ground here is
+ * level with the village" apart from "nothing is known about this column".
+ */
+export function groundUpAt(dimension, origin, facing, forward, side, band = 32) {
+  const at = toWorld(origin, facing, forward, side, 0);
+  const ground = probeGround(dimension, at.x, at.z, origin.y + band, origin.y - band);
+  return ground ? ground.y + 1 - origin.y : null;
+}
+
+/**
+ * Carries one column down from `topUp` to the first solid ground under it.
+ *
+ * This is what stops a wall that follows a slope from leaving a hole under
+ * itself wherever the ground dips away: the visible wall starts at its own
+ * base, and everything between that base and the real surface is filled in
+ * as foundation rather than left as a gap you can crawl through.
+ *
+ * Only air, foliage and natural terrain are overwritten, so it can never eat
+ * a block a player (or an earlier build) put there deliberately.
+ */
+export function underpinColumn(dimension, origin, facing, forward, side, topUp, block, maxDepth = 24) {
+  const at = toWorld(origin, facing, forward, side, 0);
+  const ceiling = origin.y + topUp;
+  const ground = probeGround(dimension, at.x, at.z, ceiling, ceiling - maxDepth);
+  // Nothing solid within reach means a void or an unloaded chunk. Sinking a
+  // pillar of foundation into it on a guess would look far worse than the gap.
+  if (!ground) return 0;
+  let filled = 0;
+  for (let y = ground.y + 1; y <= ceiling; y++) {
+    let typeId = null;
+    try { typeId = dimension.getBlock({ x: at.x, y, z: at.z })?.typeId; } catch (e) { continue; }
+    if (isVoidOrFoliage(typeId) || isNaturalTerrain(typeId)) {
+      setBlock(dimension, at.x, y, at.z, block || "minecraft:dirt");
+      filled++;
+    }
+  }
+  return filled;
+}
+
+/**
+ * Turns raw ground heights into a base height per cell that a wall can
+ * actually be built on, by raising each cell until no neighbour along the run
+ * is more than `maxStep` away from it.
+ *
+ * The smoothing only ever raises. That direction is the whole point: an
+ * envelope that could also lower would drag the wall down into the next hill
+ * along, which is the "стены в земле" this profile exists to stop. Lifted over
+ * a dip the wall simply stands on a plinth of foundation (underpinColumn fills
+ * it), which is what a real wall crossing a gully looks like.
+ *
+ * With maxStep 1 the result is a staircase no steeper than one block per
+ * block, so the rampart on top stays walkable end to end - which is what the
+ * watchmen's patrol route depends on.
+ *
+ * Pure array arithmetic, no world access, so it is cheap to test directly.
+ */
+export function smoothProfile(values, maxStep = 1, closed = true) {
+  const out = values.slice();
+  const n = out.length;
+  if (n === 0) return out;
+  const step = Math.max(1, maxStep);
+  // Two passes each way. One pass propagates a peak forwards only as far as
+  // the end of the array; on a closed ring the second pass carries it round
+  // the wrap point, so a single hill lifts both walls that meet at its corner.
+  const rounds = closed ? 2 : 1;
+  for (let round = 0; round < rounds; round++) {
+    for (let i = 0; i < n; i++) {
+      const previous = i === 0 ? (closed ? out[n - 1] : null) : out[i - 1];
+      if (previous !== null && out[i] < previous - step) out[i] = previous - step;
+    }
+    for (let i = n - 1; i >= 0; i--) {
+      const next = i === n - 1 ? (closed ? out[0] : null) : out[i + 1];
+      if (next !== null && out[i] < next - step) out[i] = next - step;
+    }
+  }
+  return out;
+}
