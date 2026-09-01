@@ -1,7 +1,7 @@
 import { ItemStack } from "@minecraft/server";
 import { QUESTS } from "./quests.js";
 import { craftsmanArcForRole } from "./quest_contract_v2.js";
-import { countItems, inventoryContainer, removeExact, restoreContainer, snapshotContainer } from "./inventory.js";
+import { countItems, inventoryContainer, placeReward, removeExact, restoreContainer, rewardSlot, snapshotContainer } from "./inventory.js";
 import { PROP_LEVEL, readProperty } from "./village_state.js";
 
 const ROLE_ID_PROPERTY = "village:roleId";
@@ -34,29 +34,14 @@ function sameVillage(npc, elder) {
   return !!npcVillage && npcVillage === elderVillage;
 }
 
-function rewardSlot(container, reward) {
-  if (!reward?.itemId || !Number.isInteger(reward.amount) || reward.amount < 1) return -1;
-  for (let slot = 0; slot < container.size; slot++) {
-    const stack = container.getItem(slot);
-    if (stack?.typeId === reward.itemId && stack.amount + reward.amount <= 64) return slot;
-  }
-  for (let slot = 0; slot < container.size; slot++) {
-    if (!container.getItem(slot)) return slot;
-  }
-  return -1;
-}
-
-function placeReward(container, reward) {
-  const slot = rewardSlot(container, reward);
-  if (slot < 0) return false;
-  const stack = container.getItem(slot);
-  if (stack) {
-    stack.amount += reward.amount;
-    container.setItem(slot, stack);
-  } else {
-    container.setItem(slot, new ItemStack(reward.itemId, reward.amount));
-  }
-  return true;
+// rewardSlot/placeReward used to be spelled out here, and this file's copy was
+// the only correct one in the mod: four other reward paths reached for
+// container.addItem instead and silently destroyed the reward on a full
+// inventory. They live in inventory.js now, beside the turn-in transaction
+// helpers that were centralised for exactly the same reason - a correct
+// implementation nobody else can see is how the same bug gets rewritten.
+function makeRewardStack(reward) {
+  return new ItemStack(reward.itemId, reward.amount);
 }
 
 function questStep(npc, arc, legacyQuest) {
@@ -157,7 +142,7 @@ export function tryCompleteCraftsmanTurnIn(npc, elder, player, expectedStepId) {
 
   try {
     if (!removeExact(container, view.requirement.itemId, view.requirement.amount)) throw new Error("inventory_changed");
-    if (view.reward && !placeReward(container, view.reward)) throw new Error("reward_space_changed");
+    if (view.reward && !placeReward(container, view.reward, makeRewardStack)) throw new Error("reward_space_changed");
 
     const nextStep = view.step + 1;
     npc.setDynamicProperty("quest_step", nextStep);

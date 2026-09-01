@@ -1,6 +1,7 @@
 import { ItemStack, world, system } from "@minecraft/server";
 import { buildSpecialBuilding, spawnSpecialResident, ALCHEMIST_PRODUCTS, giveProduct } from "./specials.js";
 import { toWorld } from "./util.js";
+import { placeReward, restoreContainer, snapshotContainer } from "./inventory.js";
 import { PROP_ID, PROP_LAYOUT_VERSION, readFacing, readLevel, readOrigin, readProperty } from "./village_state.js";
 
 export const SPECIAL_QUESTS = {
@@ -112,8 +113,18 @@ export function turnInSpecialQuest(player, oldtimer, key) {
   if (!container) return { ok: false, reason: "no_inventory" };
   const have = count(container, current.item);
   if (have < current.amount) return { ok: false, reason: "not_enough", have, need: current.amount, item: current.item, current, quest };
+
+  const reward = current.reward ? { itemId: current.reward, amount: current.rewardAmount } : null;
+  const snapshot = snapshotContainer(container);
   remove(container, current.item, current.amount);
-  if (current.reward) container.addItem(new ItemStack(current.reward, current.rewardAmount));
+  // addItem returns the stack it could not fit instead of throwing, so
+  // ignoring it destroyed the reward whenever the player's inventory was full
+  // - after their items had already been taken. Reserve the slot, and put
+  // everything back rather than half-completing the step.
+  if (reward && !placeReward(container, reward, (spec) => new ItemStack(spec.itemId, spec.amount))) {
+    restoreContainer(container, snapshot);
+    return { ok: false, reason: "inventory_full", current, quest };
+  }
   const next = step + 1;
   oldtimer.setDynamicProperty(`village:specialQuest:${key}`, next);
   let build = null;

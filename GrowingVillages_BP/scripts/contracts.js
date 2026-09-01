@@ -1,5 +1,5 @@
 import { ItemStack } from "@minecraft/server";
-import { countItems, inventoryContainer, removeExact, restoreContainer, snapshotContainer } from "./inventory.js";
+import { countItems, inventoryContainer, placeReward, removeExact, restoreContainer, snapshotContainer } from "./inventory.js";
 import { LEVELS } from "./levels.js";
 import { PROP_LEVEL, readLevel, readProperty } from "./village_state.js";
 
@@ -127,9 +127,18 @@ export function contractView(elder, day) {
  * goods and then failed to pay would be the worst possible bug in a system the
  * player is meant to repeat every day.
  */
-export function turnInContract(player, elder, day) {
+export function turnInContract(player, elder, day, expectedContractId) {
   const view = contractView(elder, day);
   if (!view.contract) return { ok: false, reason: "too_early" };
+  // The contract screen is a form, and a form can sit open across a sunrise.
+  // Without this the player would confirm "bring 32 wheat" and the commit,
+  // re-deriving the contract from the day it actually runs on, would take 64
+  // cobblestone instead - or report "not enough" for an item they were never
+  // asked for. Every other turn-in in the mod already guards its displayed
+  // step this way (craftsman_quests' expectedStepId, sentinel_quests' too).
+  if (expectedContractId && view.contract.id !== expectedContractId) {
+    return { ok: false, reason: "stale_contract", contract: view.contract };
+  }
   if (!view.available) return { ok: false, reason: "done_today", contract: view.contract };
 
   const container = inventoryContainer(player);
@@ -141,19 +150,30 @@ export function turnInContract(player, elder, day) {
     return { ok: false, reason: "not_enough", have, need: contract.amount, contract };
   }
 
+  const reward = contract.rewardItem && contract.rewardAmount > 0
+    ? { itemId: contract.rewardItem, amount: contract.rewardAmount }
+    : null;
+
   const snapshot = snapshotContainer(container);
   try {
-    removeExact(container, contract.itemId, contract.amount);
-    if (contract.rewardItem && contract.rewardAmount > 0) {
-      container.addItem(new ItemStack(contract.rewardItem, contract.rewardAmount));
+    if (!removeExact(container, contract.itemId, contract.amount)) throw new Error("inventory_changed");
+    // Placed rather than addItem()ed: addItem returns the overflow it could
+    // not fit instead of throwing, so ignoring it destroyed the reward on a
+    // full inventory while still taking the goods. The room is checked after
+    // the requirement comes out, since removing it usually frees the slot.
+    if (reward && !placeReward(container, reward, (spec) => new ItemStack(spec.itemId, spec.amount))) {
+      throw new Error("inventory_full");
     }
     elder.setDynamicProperty(PROP_DAY, Math.floor(day));
     elder.setDynamicProperty(PROP_DONE, contractsCompleted(elder) + 1);
     elder.setDynamicProperty(PROP_STANDING, standingOf(elder) + STANDING_PER_CONTRACT);
   } catch (error) {
     restoreContainer(container, snapshot);
-    console.warn("[village] contract turn-in failed: " + error);
-    return { ok: false, reason: "turn_in_failed", contract };
+    const reason = error?.message === "inventory_full" ? "inventory_full"
+      : error?.message === "inventory_changed" ? "not_enough"
+        : "turn_in_failed";
+    if (reason === "turn_in_failed") console.warn("[village] contract turn-in failed: " + error);
+    return { ok: false, reason, contract };
   }
 
   return {

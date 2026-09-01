@@ -137,7 +137,7 @@ function runFarmer(farmer) {
   if (!hasSpace(container)) return;
 
   const R = 12;
-  const actionsRemaining = 1;
+  let actionsRemaining = 1;
   for (let dx = -R; dx <= R; dx++) {
     for (let dz = -R; dz <= R; dz++) {
       for (let dy = -2; dy <= 2; dy++) {
@@ -166,11 +166,25 @@ function runFarmer(farmer) {
         } catch (e) {
           continue;
         }
-        container.addItem(new ItemStack("minecraft:wheat", 1));
+        // addItem returns whatever would not fit rather than throwing, and the
+        // barrel can fill up between the hasSpace() check above and here (the
+        // seed roll below needs a slot of its own when nothing is stackable).
+        // Only count what actually landed, and put the crop back if none of it
+        // did, so the day's quota is never spent on wheat that vanished.
+        const leftover = container.addItem(new ItemStack("minecraft:wheat", 1));
+        if (leftover) {
+          try { block.setPermutation(block.permutation.withState("growth", 7)); } catch (e) { /* leave it reset */ }
+          return;
+        }
         if (Math.random() < 0.25) {
           container.addItem(new ItemStack("minecraft:wheat_seeds", 1));
         }
         addProduced(farmer, 1);
+        // One harvest per production tick, so the field visibly cycles instead
+        // of emptying at once. This counter was declared `const` and then
+        // decremented, which throws "Assignment to constant variable" in strict
+        // mode (every ES module is strict) - swallowed by the loop's catch, so
+        // it never surfaced, but it made the line below unreachable.
         actionsRemaining--;
         if (actionsRemaining <= 0 || producedToday(farmer) >= workerDailyCap(farmer, "Фермер")) return;
       }
@@ -210,8 +224,12 @@ function runMiner(miner) {
     1 + Math.floor(Math.random() * entry.max)
   );
   if (amount <= 0) return;
-  container.addItem(new ItemStack(entry.typeId, amount));
-  addProduced(miner, amount);
+  // Same rule as the farmer's: only the part that actually landed counts
+  // against the day's quota. addItem hands back the overflow rather than
+  // throwing, so ignoring it spent the quota on ingots nobody ever received.
+  const leftover = container.addItem(new ItemStack(entry.typeId, amount));
+  const stored = amount - (leftover?.amount || 0);
+  if (stored > 0) addProduced(miner, stored);
 }
 
 /** Background loop driving all worker production. */
@@ -231,7 +249,11 @@ export function startProductionLoop() {
         if (role === "Фермер") runFarmer(worker);
         else if (role === "Шахтёр") runMiner(worker);
       } catch (e) {
-        /* keep other workers running */
+        // Keep the other workers running, but say something: this catch used
+        // to be silent, and it hid a "Assignment to constant variable" thrown
+        // on every single farmer harvest for as long as that bug existed.
+        // Every other background loop in the mod logs here for the same reason.
+        console.warn("[village] worker production failed: " + e);
       }
     }
   }, PRODUCTION_INTERVAL_TICKS);

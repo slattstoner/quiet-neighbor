@@ -1,4 +1,5 @@
 import { ItemStack } from "@minecraft/server";
+import { placeReward, restoreContainer, snapshotContainer } from "./inventory.js";
 
 /**
  * Quest progress belongs to a craftsman, not one player.  The stable legacy
@@ -68,8 +69,19 @@ export function turnInQuest(player, professionName, elder, npc) {
   const current = quest.chain[step]; const inventory = player.getComponent("minecraft:inventory"); const container = inventory?.container;
   if (!container) return { ok: false, reason: "no_inventory" };
   const have = countInInventory(container, current.requiredItem); if (have < current.requiredAmount) return { ok: false, reason: "not_enough", need: current.requiredAmount, have, item: current.requiredItem, current };
+  const reward = current.rewardItem && current.rewardAmount > 0
+    ? { itemId: current.rewardItem, amount: current.rewardAmount }
+    : null;
+  // All-or-nothing, like every other turn-in: container.addItem hands back the
+  // stack it could not place rather than throwing, so paying the reward with
+  // it and discarding the result took the player's goods and gave nothing
+  // whenever their inventory was full.
+  const snapshot = snapshotContainer(container);
   removeFromInventory(container, current.requiredItem, current.requiredAmount);
-  if (current.rewardItem && current.rewardAmount > 0) container.addItem(new ItemStack(current.rewardItem, current.rewardAmount));
+  if (reward && !placeReward(container, reward, (spec) => new ItemStack(spec.itemId, spec.amount))) {
+    restoreContainer(container, snapshot);
+    return { ok: false, reason: "inventory_full", quest, current };
+  }
   const nextStep = step + 1; if (npc) npc.setDynamicProperty("quest_step", nextStep);
   const chainComplete = nextStep >= quest.chain.length;
   if (chainComplete && elder) { const key = `village:discount:${quest.discountLevel}:${quest.discountItem}`; elder.setDynamicProperty(key, (elder.getDynamicProperty(key) || 0) + quest.discountAmount); }

@@ -1,6 +1,7 @@
-import { ItemStack } from "@minecraft/server";
+import { ItemStack, Potions } from "@minecraft/server";
 import { toWorld, setBlock, setBlockMulti, VILLAGER_TYPE, ADULT_SPAWN_OPTIONS } from "./util.js";
 import { prepareSite, sampleGroundLevel, withLoadedArea } from "./terrain.js";
+import { placeReward, restoreContainer, snapshotContainer } from "./inventory.js";
 
 /**
  * Special buildings sit on their own plots INSIDE the village, in the
@@ -310,17 +311,77 @@ export function spawnSpecialResident(key, dimension, location, villageId) {
   return npc;
 }
 
+/**
+ * `potionEffect` is what makes a potion an actual potion.
+ *
+ * A bare `new ItemStack("minecraft:potion")` is not a healing potion - it is
+ * the default, effectless potion, because in Bedrock the effect lives in the
+ * item's potion data, not its identifier. Both potions below used to be built
+ * that way, so the alchemist charged 4 emeralds for one and 6 for the other
+ * and handed over the same useless bottle either way. The effect is applied
+ * through Potions.resolve() now (see potionStack), and a build where that is
+ * unavailable refuses the sale instead of taking payment for a dud.
+ */
 export const ALCHEMIST_PRODUCTS = [
-  { id: "minecraft:potion", amount: 1, cost: 4, label: "Зелье лечения", ingredient: "minecraft:glass_bottle" },
-  { id: "minecraft:potion", amount: 1, cost: 6, label: "Зелье ночного зрения", ingredient: "minecraft:glass_bottle" },
+  { id: "minecraft:potion", potionEffect: "healing", amount: 1, cost: 4, label: "Зелье лечения", ingredient: "minecraft:glass_bottle" },
+  { id: "minecraft:potion", potionEffect: "night_vision", amount: 1, cost: 6, label: "Зелье ночного зрения", ingredient: "minecraft:glass_bottle" },
   { id: "minecraft:glass_bottle", amount: 3, cost: 1, label: "Три стеклянные бутылки" },
   { id: "minecraft:fermented_spider_eye", amount: 1, cost: 3, label: "Ферментированный паучий глаз" },
   { id: "minecraft:glowstone_dust", amount: 2, cost: 3, label: "Светокаменная пыль" }
 ];
 
+/**
+ * Builds a drinkable potion of the given effect, or null if this engine build
+ * cannot make one.
+ *
+ * Potions.resolve(effectType, deliveryType) is the API for this; both
+ * arguments are ids whose exact spelling is the kind of thing that has moved
+ * between versions, so each is tried in a few forms rather than assumed -
+ * the same defensive shape util.js's setBlockMulti uses for block states.
+ * Returning null (rather than falling back to a plain potion) is deliberate:
+ * a silent fallback here is indistinguishable from the bug this replaces.
+ */
+export function potionStack(effectId) {
+  if (typeof Potions?.resolve !== "function") return null;
+  const effects = [effectId, `minecraft:${effectId}`];
+  const deliveries = ["regular", "minecraft:regular", "Regular"];
+  for (const effect of effects) {
+    for (const delivery of deliveries) {
+      try {
+        const stack = Potions.resolve(effect, delivery);
+        if (stack) return stack;
+      } catch (error) {
+        /* wrong spelling for this build - try the next */
+      }
+    }
+  }
+  return null;
+}
+
+/** The reward spec and stack factory for one shop product, or null if unsellable. */
+function productGoods(product) {
+  if (!product?.id || !Number.isInteger(product.amount) || product.amount < 1) return null;
+  if (!product.potionEffect) {
+    return {
+      spec: { itemId: product.id, amount: product.amount },
+      make: (entry) => new ItemStack(entry.itemId, entry.amount)
+    };
+  }
+  const stack = potionStack(product.potionEffect);
+  if (!stack) return null;
+  // Potions never stack, so a potion must always claim an empty slot - merging
+  // a night-vision bottle into a stack of healing bottles would be worse than
+  // no sale at all.
+  return { spec: { itemId: product.id, amount: product.amount, stackable: false }, make: () => stack };
+}
+
 export function giveProduct(player, product) {
   const inventory = player?.getComponent("minecraft:inventory")?.container;
   if (!inventory || !product) return { ok: false, reason: "no_inventory" };
+  // Built before a single emerald changes hands: if this build cannot make the
+  // goods, the sale must not happen at all.
+  const goods = productGoods(product);
+  if (!goods) return { ok: false, reason: "unavailable", product };
   let emeralds = 0;
   for (let i = 0; i < inventory.size; i++) {
     const stack = inventory.getItem(i);
@@ -334,25 +395,44 @@ export function giveProduct(player, product) {
     }
     if (!hasIngredient) return { ok: false, reason: "missing_ingredient", ingredient: product.ingredient };
   }
-  let remaining = product.cost;
-  for (let i = 0; i < inventory.size && remaining > 0; i++) {
-    const stack = inventory.getItem(i);
-    if (!stack || stack.typeId !== "minecraft:emerald") continue;
-    const take = Math.min(remaining, stack.amount);
-    remaining -= take;
-    if (take >= stack.amount) inventory.setItem(i, undefined);
-    else { stack.amount -= take; inventory.setItem(i, stack); }
-  }
-  if (product.ingredient) {
-    for (let i = 0; i < inventory.size; i++) {
+  // Charging and handing over is one all-or-nothing transaction. Previously
+  // the emeralds came out, the ingredient came out, and then addItem was
+  // called and its return value thrown away - and addItem does not throw when
+  // there is no room, it hands back the stack it could not place. So buying
+  // with a full inventory took the payment and delivered nothing at all.
+  const snapshot = snapshotContainer(inventory);
+  try {
+    let remaining = product.cost;
+    for (let i = 0; i < inventory.size && remaining > 0; i++) {
       const stack = inventory.getItem(i);
-      if (!stack || stack.typeId !== product.ingredient) continue;
-      if (stack.amount <= 1) inventory.setItem(i, undefined);
-      else { stack.amount -= 1; inventory.setItem(i, stack); }
-      break;
+      if (!stack || stack.typeId !== "minecraft:emerald") continue;
+      const take = Math.min(remaining, stack.amount);
+      remaining -= take;
+      if (take >= stack.amount) inventory.setItem(i, undefined);
+      else { stack.amount -= take; inventory.setItem(i, stack); }
     }
+    if (remaining > 0) throw new Error("not_enough_emeralds");
+    if (product.ingredient) {
+      let took = false;
+      for (let i = 0; i < inventory.size; i++) {
+        const stack = inventory.getItem(i);
+        if (!stack || stack.typeId !== product.ingredient) continue;
+        if (stack.amount <= 1) inventory.setItem(i, undefined);
+        else { stack.amount -= 1; inventory.setItem(i, stack); }
+        took = true;
+        break;
+      }
+      if (!took) throw new Error("missing_ingredient");
+    }
+    if (!placeReward(inventory, goods.spec, goods.make)) throw new Error("inventory_full");
+  } catch (error) {
+    restoreContainer(inventory, snapshot);
+    const reason = ["inventory_full", "missing_ingredient", "not_enough_emeralds"].includes(error?.message)
+      ? error.message
+      : "purchase_failed";
+    if (reason === "purchase_failed") console.warn("[village] alchemist purchase failed: " + error);
+    return { ok: false, reason, need: product.cost, ingredient: product.ingredient, product };
   }
-  inventory.addItem(new ItemStack(product.id, product.amount));
   return { ok: true, product };
 }
 

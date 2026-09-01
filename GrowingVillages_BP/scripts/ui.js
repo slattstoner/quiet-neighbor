@@ -212,7 +212,11 @@ async function openContractMenu(player, elder) {
     .show(player);
   if (!isUsableEntity(player) || !isUsableEntity(elder) || response.canceled || response.selection !== 0) return;
 
-  const result = turnInContract(player, elder, currentWorldDay());
+  // The day is re-read here rather than reused from above, because a form can
+  // stay open across a sunrise - but the contract the player agreed to is
+  // passed along so a rollover cannot quietly swap it for tomorrow's errand
+  // and take a different item than the screen asked for.
+  const result = turnInContract(player, elder, currentWorldDay(), contract.id);
   if (result.ok) {
     announceToNearbyPlayers(elder, `§eСтароста: §rПодряд закрыт. Деревня это запомнит.`);
     await new MessageFormData().title(contract.title)
@@ -224,7 +228,11 @@ async function openContractMenu(player, elder) {
     ? `Не хватает: нужно ${result.need}, у тебя ${result.have}.`
     : result.reason === "done_today"
       ? "Сегодняшний подряд уже закрыт."
-      : "Сейчас подряд принять не выходит.";
+      : result.reason === "inventory_full"
+        ? "В инвентаре нет места под награду — освободи слот и загляни снова."
+        : result.reason === "stale_contract"
+          ? "Пока мы говорили, настал новый день. Староста уже просит о другом — открой подряды заново."
+          : "Сейчас подряд принять не выходит.";
   await new MessageFormData().title(contract.title).body(problem)
     .button1("Понятно").button2("Закрыть").show(player);
 }
@@ -258,30 +266,68 @@ export async function openElderMenu(player, elder) {
   if (chosen) return chosen.run();
 }
 
+/**
+ * Why a level-up did not happen, in words the player can act on.
+ *
+ * Everything that was not "not enough resources" used to be reported AS "not
+ * enough resources", or as nothing at all. A legacy-layout village at its cap
+ * hits `legacy_layout_max` on every attempt, so it was told to bring more
+ * resources forever, for a level it can never reach; and every failure of the
+ * build pipeline itself closed the menu in silence, which reads as the button
+ * being broken.
+ */
+function levelUpProblem(reason) {
+  switch (reason) {
+    case "no_chest":
+      return "Сундук ратуши не найден. Он должен стоять на своём месте в ратуше — без него старосте некуда смотреть.";
+    case "legacy_layout_max":
+      return "Эта деревня заложена по старой планировке и выросла до её предела. Новые уровни доступны деревням, основанным начиная с 0.6.0 — заложи новую, чтобы пойти дальше.";
+    case "invalid_layout_version":
+      return "Записи о планировке деревни повреждены, и дальше строить нельзя. Загляни в лог — там детали.";
+    case "city_build_recovered":
+      return "Прошлая стройка оборвалась на полпути. Записи приведены в порядок, ресурсы не потрачены — нажми ещё раз, чтобы начать заново.";
+    case "city_build_failed":
+      return "Стройку не удалось закончить — скорее всего, участок ещё не прогружен. Ресурсы остались в сундуке: подожди немного и попробуй снова.";
+    case "city_build_state_mismatch":
+      return "Постройка этого уровня уже отмечена как готовая, но уровень не поднялся. Староста не станет строить её второй раз — детали в логе.";
+    case "city_commit_failed":
+      return "Постройка встала, но списать ресурсы не вышло. Проверь сундук ратуши.";
+    default:
+      return null;
+  }
+}
+
+async function showElderMessage(player, body) {
+  if (!isUsableEntity(player)) return;
+  await new MessageFormData()
+    .title("Староста")
+    .body(body)
+    .button1("Понятно")
+    .button2("Закрыть")
+    .show(player);
+}
+
 async function levelUpFromMenu(player, elder) {
   const check = chestSatisfiesRequirements(elder);
   if (check.finished) {
-    await new MessageFormData()
-      .title("Староста")
-      .body("Деревня уже достигла максимума этой бета-версии. Спасибо, что помог нам вырасти!")
-      .button1("Понятно")
-      .button2("Закрыть")
-      .show(player);
+    await showElderMessage(player, "Деревня уже достигла максимума этой бета-версии. Спасибо, что помог нам вырасти!");
     return;
   }
   if (!check.done) {
-    await new MessageFormData()
-      .title("Староста")
-      .body("В сундуке ратуши пока не хватает ресурсов. Загляни ещё раз, когда принесёшь всё нужное.")
-      .button1("Понятно")
-      .button2("Закрыть")
-      .show(player);
+    await showElderMessage(player, levelUpProblem(check.error)
+      || "В сундуке ратуши пока не хватает ресурсов. Загляни ещё раз, когда принесёшь всё нужное.");
     return;
   }
   const result = tryLevelUp(elder);
   if (result.done && result.leveledUpTo) {
     announceToNearbyPlayers(elder, `§eСтароста: §rНаконец-то! "${result.label}" готов(а). Деревня растёт!`);
+    return;
   }
+  // A level-up that fails after the chest already passed its check must say so.
+  // Returning quietly here left the player looking at a full chest and a menu
+  // that simply closed, with no way to tell a real problem from a misclick.
+  await showElderMessage(player, levelUpProblem(result.error)
+    || "Построить сейчас не вышло. Ресурсы на месте — попробуй ещё раз, а если повторится, посмотри детали в логе.");
 }
 
 function extensionErrorKey(reason) {
@@ -663,6 +709,10 @@ export async function openCraftsmanMenu(player, npc) {
 
 
 export async function openOldtimerMenu(player, oldtimer) {
+  // Same liveness guards every other menu in this file uses. A form resolves
+  // when the player closes it OR when they disconnect, so without re-checking
+  // after each await this walked straight into a stale entity handle.
+  if (!isUsableEntity(player) || !isUsableEntity(oldtimer)) return;
   const keys = Object.keys(SPECIAL_QUESTS);
   const form = new ActionFormData().title("Старожила").body("Я помню три места, которые можно вернуть деревне. Выбери, с чего начнём.");
   for (const key of keys) {
@@ -672,7 +722,7 @@ export async function openOldtimerMenu(player, oldtimer) {
   }
   form.button("Уйти");
   const response = await form.show(player);
-  if (response.canceled || response.selection === keys.length) return;
+  if (!isUsableEntity(player) || !isUsableEntity(oldtimer) || response.canceled || response.selection === keys.length) return;
   const key = keys[response.selection];
   const quest = SPECIAL_QUESTS[key];
   const step = getSpecialQuestStep(oldtimer, key);
@@ -682,22 +732,32 @@ export async function openOldtimerMenu(player, oldtimer) {
   }
   const current = quest.chain[step];
   const confirm = await new ActionFormData().title(`${quest.title} (${step + 1}/${quest.chain.length})`).body(current.question).button("Выполнить").button("Отмена").show(player);
-  if (confirm.canceled || confirm.selection !== 0) return;
+  if (!isUsableEntity(player) || !isUsableEntity(oldtimer) || confirm.canceled || confirm.selection !== 0) return;
   const result = turnInSpecialQuest(player, oldtimer, key);
   const text = result.ok
     ? (result.complete ? `${quest.complete}\n\nПостройка создана: ${quest.building}.` : "Старожила кивает. Первый шаг выполнен.")
-    : `Не хватает предметов: ${result.need || current.amount} × ${current.item.replace("minecraft:", "")}. Сейчас есть: ${result.have || 0}.`;
+    : result.reason === "inventory_full"
+      ? "В инвентаре нет места под награду — освободи слот и возвращайся."
+      : `Не хватает предметов: ${result.need || current.amount} × ${current.item.replace("minecraft:", "")}. Сейчас есть: ${result.have || 0}.`;
+  if (!isUsableEntity(player)) return;
   await new MessageFormData().title("Старожила").body(text).button1("Хорошо").button2("Закрыть").show(player);
 }
 
 export async function openAlchemistMenu(player) {
+  if (!isUsableEntity(player)) return;
   const products = alchemistProducts();
   const form = new ActionFormData().title("Алхимик").body("Ингредиенты и изумруды — и я приготовлю кое-что полезное.");
   for (const product of products) form.button(`${product.label} — ${product.cost} изумр.`);
   form.button("Уйти");
   const response = await form.show(player);
-  if (response.canceled || response.selection >= products.length) return;
+  if (!isUsableEntity(player) || response.canceled || response.selection >= products.length) return;
   const result = buyAlchemistProduct(player, response.selection);
-  const text = result.ok ? `Получено: ${result.product.label}.` : result.reason === "missing_ingredient" ? `Нужен ингредиент: ${result.ingredient.replace("minecraft:", "")}.` : `Нужно изумрудов: ${result.need}.`;
+  const text = result.ok
+    ? `Получено: ${result.product.label}.`
+    : result.reason === "missing_ingredient" ? `Нужен ингредиент: ${result.ingredient.replace("minecraft:", "")}.`
+      : result.reason === "inventory_full" ? "В инвентаре нет места — освободи слот, и я всё отдам."
+        : result.reason === "unavailable" ? "Этого зелья я сейчас сварить не могу. Спроси о чём-нибудь другом."
+          : `Нужно изумрудов: ${result.need}.`;
+  if (!isUsableEntity(player)) return;
   await new MessageFormData().title("Алхимик").body(text).button1("Спасибо").button2("Закрыть").show(player);
 }
