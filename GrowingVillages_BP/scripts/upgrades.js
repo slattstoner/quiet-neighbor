@@ -3,6 +3,7 @@ import { prepareSite } from "./terrain.js";
 import { paletteMats, farmerPatchOuterEdge } from "./builder.js";
 import { writeSign } from "./signboard.js";
 import { readFacing, readOrigin, readPaletteId } from "./village_state.js";
+import { resolveCraftsmanRole } from "./craftsman_quests.js";
 
 const PLUS_SIDE_COMPASS = ["south", "north", "east", "west"];
 const MINUS_SIDE_COMPASS = ["north", "south", "west", "east"];
@@ -252,6 +253,41 @@ function penBay(plotForward, index) {
 }
 
 /**
+ * The three animal pens, and how many head each is meant to hold.
+ *
+ * The counts are the ones the pens are built with, so "stocked" means the
+ * same thing whether a pen was just finished or has been standing for a
+ * hundred days. Deliberately small: livestock here is scenery, not
+ * production - nothing in production.js looks at an animal, and these
+ * numbers must never become a reason for it to.
+ */
+export const FARM_PENS = Object.freeze([
+  Object.freeze({ tier: 2, index: 0, species: "minecraft:chicken", cap: 3, label: "coop" }),
+  Object.freeze({ tier: 3, index: 1, species: "minecraft:cow", cap: 2, label: "cow_barn" }),
+  Object.freeze({ tier: 4, index: 2, species: "minecraft:pig", cap: 2, label: "pig_pen" })
+]);
+
+/**
+ * The open yard of one pen, in local coordinates - the part an animal can
+ * actually stand in, excluding the roofed shelter band.
+ *
+ * Exported because the pens are built once, at the moment their quest tier is
+ * finished, and the animals put in them then are never replaced: a wolf, a
+ * zombie or a long fall used to leave a pen empty for the rest of the world's
+ * life. livestock.js needs to know where a pen is to see whether it is still
+ * populated, and deriving that from the same penBay/penSubBands the builders
+ * use is the only way the two cannot drift apart.
+ */
+export function penYardBounds(plotForward, side, index) {
+  const bay = penBay(plotForward, index);
+  const { yard } = penSubBands(side);
+  return Object.freeze({
+    fMin: Math.min(bay.f1, bay.f2), fMax: Math.max(bay.f1, bay.f2),
+    sMin: yard.sMin, sMax: yard.sMax
+  });
+}
+
+/**
  * The full rectangle (in local coordinates) every farmer quest-upgrade
  * building can land in. Exported so levels.js can protect it from the
  * fortification wall's interior terrain sweep - without this, the sweep
@@ -479,20 +515,27 @@ export function applyCraftsmanUpgrade(npc, elder, upgrade) {
   if (plotForward === undefined || side === undefined) return { ok: false, reason: "missing_plot" };
 
   const { origin, facing } = elderState(elder);
-  const profession = (npc.nameTag || "").replace(/§./g, "");
+  // By role id, not by the villager's display name. This used to read
+  // `npc.nameTag` and compare it against "Фермер" / "Кузнец" and so on -
+  // the same defect production.js had, and with the same consequence:
+  // renaming a craftsman, to another language or just another word, silently
+  // broke his quest upgrades with no error anywhere. resolveCraftsmanRole
+  // prefers the stable `village:roleId` npc.js writes at spawn and only falls
+  // back to the name for villagers from worlds saved before it existed.
+  const roleId = resolveCraftsmanRole(npc);
   try {
-    if (profession === "Фермер") {
+    if (roleId === "farmer") {
       const paletteId = paletteOf(elder);
       if (upgrade.tier === 1) buildExpandedField(npc.dimension, origin, facing, plotForward, side, paletteId);
       else if (upgrade.tier === 2) buildChickenCoop(npc.dimension, origin, facing, plotForward, side, paletteId);
       else if (upgrade.tier === 3) buildCowBarn(npc.dimension, origin, facing, plotForward, side, paletteId);
       else if (upgrade.tier === 4) buildPigPen(npc.dimension, origin, facing, plotForward, side, paletteId);
       else buildFarmerBarn(npc.dimension, origin, facing, plotForward, side, paletteId);
-    } else if (profession === "Кузнец") {
+    } else if (roleId === "blacksmith") {
       buildBlacksmithYard(npc.dimension, origin, facing, plotForward, side, upgrade.tier);
-    } else if (profession === "Картограф") {
+    } else if (roleId === "cartographer") {
       buildCartographerArchive(npc.dimension, origin, facing, plotForward, side, upgrade.tier);
-    } else if (profession === "Шахтёр") {
+    } else if (roleId === "miner") {
       buildMinerYard(npc.dimension, origin, facing, plotForward, side, upgrade.tier);
     } else {
       return { ok: false, reason: "unknown_profession" };

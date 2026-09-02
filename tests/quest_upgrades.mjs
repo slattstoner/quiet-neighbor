@@ -9,9 +9,20 @@ let failures = 0;
 function assert(cond, msg) { if (!cond) { failures++; console.error("FAIL:", msg); } else console.log("ok:", msg); }
 function blockAt(dim, origin, f, s, up = 0) { const p = toWorld(origin, 0, f, s, up); return dim.getBlock(p).typeId; }
 
-function spawnFarmer(dim, origin, plotForward = 12, plotSide = -1) {
+/**
+ * `naming` decides how the farmer is identified. "roleId" is how npc.js
+ * actually spawns one, "legacyName" is a villager from a world saved before
+ * that property existed, and "renamed" is one whose display name has been
+ * changed - which used to break his upgrades silently, since the dispatch
+ * compared nameTag against "Фермер".
+ */
+function spawnFarmer(dim, origin, plotForward = 12, plotSide = -1, naming = "both") {
   const farmer = dim.spawnEntity("minecraft:villager_v2", { x: origin.x + plotForward, y: origin.y, z: origin.z + plotSide });
-  farmer.nameTag = "§bФермер§r";
+  if (naming === "legacyName" || naming === "both") farmer.nameTag = "§bФермер§r";
+  if (naming === "renamed") farmer.nameTag = "§bМарта-пряха§r";
+  if (naming === "roleId" || naming === "both" || naming === "renamed") {
+    farmer.setDynamicProperty("village:roleId", "farmer");
+  }
   farmer.setDynamicProperty("village:plotForward", plotForward);
   farmer.setDynamicProperty("village:plotSide", plotSide);
   return farmer;
@@ -91,6 +102,43 @@ applyCraftsmanUpgrade(desertFarmer, desertElder, { tier: 1, label: "Большо
 applyCraftsmanUpgrade(desertFarmer, desertElder, { tier: 2, label: "Курятник" });
 assert(blockAt(dim, desertOrigin, 10, -25, 0) === "minecraft:acacia_log",
   "desert-biome village builds the chicken coop out of the desert palette, not hardcoded oak");
+
+console.log("\n=== an upgrade is dispatched by role, not by the villager's name ===");
+{
+  // applyCraftsmanUpgrade used to read npc.nameTag and compare it against
+  // "Фермер"/"Кузнец"/etc. - the same defect production.js had. A renamed
+  // craftsman got "unknown_profession" and his upgrade silently never built.
+  const renamedOrigin = { x: 800400, y: 70, z: 0 };
+  const renamedPlayer = __test__.makePlayer("RenamedTester", { x: 800400, y: 70, z: 0 });
+  const renamedElder = foundVillage(renamedPlayer, renamedOrigin, 0);
+  const renamed = spawnFarmer(dim, renamedOrigin, 12, -1, "renamed");
+
+  const built = applyCraftsmanUpgrade(renamed, renamedElder, { tier: 1, label: "Большое поле" });
+  assert(built.ok && !built.alreadyApplied,
+    `a farmer with a changed name still gets his upgrade (${built.reason ?? "ok"})`);
+  assert(renamed.getDynamicProperty("village:upgradeTier") === 1,
+    `and the tier is recorded (${renamed.getDynamicProperty("village:upgradeTier")})`);
+
+  // A villager from a world saved before village:roleId existed is still
+  // recognised by name, so the change cannot strand an existing save.
+  const legacyOrigin = { x: 800600, y: 70, z: 0 };
+  const legacyPlayer = __test__.makePlayer("LegacyTester", { x: 800600, y: 70, z: 0 });
+  const legacyElder = foundVillage(legacyPlayer, legacyOrigin, 0);
+  const legacy = spawnFarmer(dim, legacyOrigin, 12, -1, "legacyName");
+  assert(legacy.getDynamicProperty("village:roleId") === undefined, "the legacy farmer really has no role id");
+  const legacyBuilt = applyCraftsmanUpgrade(legacy, legacyElder, { tier: 1, label: "Большое поле" });
+  assert(legacyBuilt.ok, `a pre-roleId farmer is still upgraded (${legacyBuilt.reason ?? "ok"})`);
+
+  // And a villager who is neither is still refused, rather than being
+  // treated as some default profession.
+  const strangerOrigin = { x: 800800, y: 70, z: 0 };
+  const strangerPlayer = __test__.makePlayer("StrangerTester", { x: 800800, y: 70, z: 0 });
+  const strangerElder = foundVillage(strangerPlayer, strangerOrigin, 0);
+  const stranger = spawnFarmer(dim, strangerOrigin, 12, -1, "none");
+  const refused = applyCraftsmanUpgrade(stranger, strangerElder, { tier: 1, label: "Большое поле" });
+  assert(!refused.ok && refused.reason === "unknown_profession",
+    `a villager with no role at all is refused (${refused.reason})`);
+}
 
 console.log(failures === 0 ? "\nALL QUEST UPGRADE TESTS PASSED" : `\n${failures} QUEST UPGRADE TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

@@ -13,6 +13,7 @@ import { startPatrolLoop } from "./patrol.js";
 import { SURVEY_CHARTER_ID, CHARTER_RANGE, charterMessage, useSurveyCharter } from "./outpost_runtime.js";
 import { reportMissingStructures } from "./structure_build.js";
 import { startOnboarding } from "./onboarding.js";
+import { startLivestockLoop } from "./livestock.js";
 
 const ORACLE_BELL_ID = "village:oracle_bell";
 const LEVEL_BELL_TARGETS = new Map([
@@ -181,5 +182,6 @@ system.run(() => {
   startFortificationRepairLoop();
   startQuarterLoop();
   startPatrolLoop();
+  startLivestockLoop();
   world.sendMessage("§7[Growing Villages] бета загружена.");
 });
