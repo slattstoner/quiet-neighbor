@@ -1,0 +1,23 @@
+{
+  "contracts.js": 18,
+  "craftsman_quests.js": 4,
+  "dialogue.js": 52,
+  "levels.js": 20,
+  "main.js": 11,
+  "npc.js": 11,
+  "outpost_runtime.js": 15,
+  "outposts.js": 4,
+  "palettes.js": 5,
+  "production.js": 2,
+  "quarters.js": 40,
+  "quest_contract_v2.js": 4,
+  "quests.js": 72,
+  "sentinel_quests.js": 6,
+  "signboard.js": 32,
+  "special_content.js": 17,
+  "specials.js": 15,
+  "ui.js": 71,
+  "upgrades.js": 9,
+  "village.js": 5,
+  "worldgen.js": 1
+}
