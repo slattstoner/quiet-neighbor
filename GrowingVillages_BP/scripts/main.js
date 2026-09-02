@@ -11,6 +11,7 @@ import { startFortificationRepairLoop } from "./fortification_repair.js";
 import { startQuarterLoop } from "./quarter_runtime.js";
 import { startPatrolLoop } from "./patrol.js";
 import { SURVEY_CHARTER_ID, CHARTER_RANGE, charterMessage, useSurveyCharter } from "./outpost_runtime.js";
+import { reportMissingStructures } from "./structure_build.js";
 
 const ORACLE_BELL_ID = "village:oracle_bell";
 const LEVEL_BELL_TARGETS = new Map([
@@ -160,6 +161,14 @@ system.run(() => {
     });
   } catch (e) {
     /* older engines have no watchdogTerminate event - nothing to guard */
+  }
+
+  // Said once, at start-up: a manifest record whose .mcstructure file is not
+  // in the pack would otherwise show up only as a building that never appeared.
+  try {
+    reportMissingStructures();
+  } catch (e) {
+    console.warn("[village] structure manifest check failed: " + e);
   }
 
   startAmbientDialogue();
