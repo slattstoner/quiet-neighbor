@@ -12,6 +12,7 @@ import { startQuarterLoop } from "./quarter_runtime.js";
 import { startPatrolLoop } from "./patrol.js";
 import { SURVEY_CHARTER_ID, CHARTER_RANGE, charterMessage, useSurveyCharter } from "./outpost_runtime.js";
 import { reportMissingStructures } from "./structure_build.js";
+import { startOnboarding } from "./onboarding.js";
 
 const ORACLE_BELL_ID = "village:oracle_bell";
 const LEVEL_BELL_TARGETS = new Map([
@@ -171,6 +172,7 @@ system.run(() => {
     console.warn("[village] structure manifest check failed: " + e);
   }
 
+  startOnboarding();
   startAmbientDialogue();
   startTetherLoop();
   startProductionLoop();

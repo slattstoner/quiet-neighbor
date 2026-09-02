@@ -404,3 +404,8 @@ growing_villages.item.feather=перо
 growing_villages.item.string=нить
 growing_villages.item.bow=лук
 growing_villages.item.arrow=стрела
+
+# Первое появление игрока в мире: что это за мод и с чего начать
+growing_villages.onboarding.what=§e[Растущие деревни]§r Где-то в этом мире стоят поселения, которые растут, если им помогать.
+growing_villages.onboarding.how=§7Своё можно заложить самому: собери §fКолокол-Оракул§7 — пять золотых слитков, книга, два железных слитка и фонарь — и позвони в него на ровном месте.
+growing_villages.onboarding.charter=§7А когда в деревне появится картограф, §fРазведочная грамота§7 (восемь листов бумаги и компас) разметит вокруг неё находки.

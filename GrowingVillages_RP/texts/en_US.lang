@@ -401,3 +401,8 @@ growing_villages.item.feather=feather
 growing_villages.item.string=string
 growing_villages.item.bow=bow
 growing_villages.item.arrow=arrow
+
+# A player's first arrival: what the mod is and how to start
+growing_villages.onboarding.what=§e[Growing Villages]§r Somewhere out there are settlements that grow, if you help them.
+growing_villages.onboarding.how=§7You can found your own: craft an §fOracle Bell§7 - five gold ingots, a book, two iron ingots and a lantern - and ring it on level ground.
+growing_villages.onboarding.charter=§7And once the village has a cartographer, a §fSurvey Charter§7 (eight paper and a compass) will map the finds around it.
