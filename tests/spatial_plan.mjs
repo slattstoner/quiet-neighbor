@@ -42,10 +42,22 @@ console.log("\n=== spatial plan exports and completeness ===");
 assert(FINAL_RADIUS === 94, "FINAL_RADIUS is the approved R94 allocation boundary");
 assert(WALL_INNER_FACE === 93, "WALL_INNER_FACE is the approved inner curtain coordinate");
 assert(TOWER_INNER_FACE === 90, "TOWER_INNER_FACE is the approved inner tower coordinate");
-assert(SPATIAL_PLAN.length === 22, `all canonical 1–20 building IDs are present exactly once (${SPATIAL_PLAN.length})`);
+// 17, not 22: three L1 plots plus one each for L2-15. The five L16-20 entries
+// were reservations for buildings that were never built (ranger_lodge,
+// mercy_infirmary, engineer_workshop, commons_infrastructure,
+// grand_council_hall) while the runtime built memorial_grove,
+// village_infirmary, civic_workshop, founders_hall and village_beacon
+// somewhere else entirely - so they only forced the real buildings to route
+// around dead ground. L16-20 bounds live beside their builders now, and the
+// no-overlap invariant across all of them is asserted in
+// extension_allocations.mjs.
+assert(SPATIAL_PLAN.length === 17, `every L1-15 plot is present exactly once (${SPATIAL_PLAN.length})`);
 assert(new Set(CANONICAL_BUILDING_IDS).size === SPATIAL_PLAN.length, "canonical building IDs are unique");
 assert(CANONICAL_BUILDING_IDS.includes("town_hall") && CANONICAL_BUILDING_IDS.includes("campfire") && CANONICAL_BUILDING_IDS.includes("starter_house"), "all separate L1 building IDs exist");
-assert(CANONICAL_BUILDING_IDS.includes("grand_council_hall"), "L20 grand_council_hall exists");
+assert(CANONICAL_BUILDING_IDS.includes("village_archive"), "L15 village_archive closes the plan");
+for (const dead of ["ranger_lodge", "mercy_infirmary", "engineer_workshop", "commons_infrastructure", "grand_council_hall"]) {
+  assert(!CANONICAL_BUILDING_IDS.includes(dead), `${dead} no longer reserves ground it will never use`);
+}
 assert(boundsFor("farmer_homestead")?.reserveEnvelopes.length === 1, "farmer retains a future quest reserve");
 assert(boundsFor("blacksmith_forge")?.reserveEnvelopes.length === 1, "blacksmith retains a future quest reserve");
 assert(boundsFor("cartographer_house")?.reserveEnvelopes.length === 1, "cartographer retains a future quest reserve");
@@ -125,7 +137,10 @@ for (let index = 0; index < allocations.length; index++) {
   assert(towerClearances[index] >= 20, `${item.id}/${item.kind}: exact tower clearance is at least 20 (${towerClearances[index]})`);
 }
 assert(Math.min(...wallClearances) === 27, `minimum curtain-wall clearance is the accepted 27 (${Math.min(...wallClearances)})`);
-assert(Math.min(...towerClearances) === 24, `minimum exact tower clearance is the accepted 24 (${Math.min(...towerClearances)})`);
+// 48, not 24: the plot that used to sit 24 blocks from a corner tower was one
+// of the five removed L16-20 reservations. Every remaining allocation is an
+// L1-15 plot, and none of those comes near a tower.
+assert(Math.min(...towerClearances) === 48, `minimum exact tower clearance is the accepted 48 (${Math.min(...towerClearances)})`);
 
 console.log("\n=== legacy safety and module purity ===");
 const futureAllocations = allocations.filter((item) => item.level >= 11);

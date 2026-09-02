@@ -44,7 +44,12 @@ for (const entry of SPATIAL_PLAN) {
 }
 // And the levels that used to fall outside, stated explicitly so the failure
 // names the actual regression rather than a radius arithmetic slip.
-for (const level of [12, 13, 14, 15, 16, 17, 18, 19]) {
+//
+// 12-15, not 12-19: SPATIAL_PLAN is the L1-15 authority now. L16-20 bounds
+// live beside their builders, and extension_allocations.mjs holds them to a
+// stricter version of this same check - at least 20 blocks of clearance from
+// the curtain rather than merely inside it.
+for (const level of [12, 13, 14, 15]) {
   const entry = SPATIAL_PLAN.find((item) => item.level === level);
   assert(insideRadius(entry.bounds, FINAL_RADIUS - 1),
     `L${level} ${entry.buildingId}: no longer stranded outside the curtain wall`);

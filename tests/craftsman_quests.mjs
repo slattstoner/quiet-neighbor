@@ -2,7 +2,7 @@ import { __test__, ItemStack } from "@minecraft/server";
 import { QUESTS } from "./scripts/quests.js";
 import { CRAFTSMAN_ARCS, validateQuestContract } from "./scripts/quest_contract_v2.js";
 import { getCraftsmanQuestView, resolveCraftsmanRole, tryCompleteCraftsmanTurnIn, validateCraftsmanTurnIn } from "./scripts/craftsman_quests.js";
-import { DAILY_CAP, STORAGE_CAP, MINER_TABLE } from "./scripts/production.js";
+import { DAILY_CAP, STORAGE_CAP, MINER_TABLE, ROLE_FARMER, ROLE_MINER } from "./scripts/production.js";
 
 let failures = 0;
 function assert(condition, message) { if (!condition) { failures++; console.error("FAIL:", message); } else console.log("ok:", message); }
@@ -115,8 +115,8 @@ assert(resolveCraftsmanRole(unknown.npc) === null && !getCraftsmanQuestView(unkn
   "unknown stable role is a neutral diagnostic and does not guess a quest");
 
 console.log("\n=== economy invariants ===");
-assert(DAILY_CAP["Фермер"] === 12 && STORAGE_CAP["Фермер"] === 64, "farmer automatic caps remain 12/day and 64 storage");
-assert(DAILY_CAP["Шахтёр"] === 6 && STORAGE_CAP["Шахтёр"] === 32, "miner automatic caps remain 6/day and 32 storage");
+assert(DAILY_CAP[ROLE_FARMER] === 12 && STORAGE_CAP[ROLE_FARMER] === 64, "farmer automatic caps remain 12/day and 64 storage");
+assert(DAILY_CAP[ROLE_MINER] === 6 && STORAGE_CAP[ROLE_MINER] === 32, "miner automatic caps remain 6/day and 32 storage");
 assert(!MINER_TABLE.some((entry) => entry.typeId === "minecraft:diamond" || entry.typeId === "minecraft:netherite_scrap"), "miner production pool remains free of diamonds and netherite");
 
 console.log(failures === 0 ? "\nALL CRAFTSMAN QUEST TESTS PASSED" : `\n${failures} CRAFTSMAN QUEST TEST(S) FAILED`);

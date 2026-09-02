@@ -3,7 +3,7 @@ import { foundVillage, tryLevelUp, getVillageState } from "./scripts/village.js"
 import { toWorld } from "./scripts/util.js";
 import { LEVELS, MAX_BETA_LEVEL, maxForwardForLevel } from "./scripts/levels.js";
 import { perimeterFor, TIER_PALISADE, TIER_COBBLE, TIER_CASTLE, buildFortifications } from "./scripts/walls.js";
-import { startProductionLoop, DAILY_CAP, STORAGE_CAP } from "./scripts/production.js";
+import { startProductionLoop, DAILY_CAP, STORAGE_CAP, ROLE_FARMER, ROLE_MINER } from "./scripts/production.js";
 import { QUESTS, getQuestFor, turnInQuest } from "./scripts/quests.js";
 import { getHome } from "./scripts/npc.js";
 import { PALETTES, paletteById } from "./scripts/palettes.js";
@@ -205,8 +205,8 @@ console.log("\n=== farmer production ===");
   // Daily cap must hold
   for (let i = 0; i < 200; i++) prodTick();
   const capped = wheatInBarrel();
-  assert(capped - before <= DAILY_CAP["Фермер"],
-    `farmer respects the daily cap (${capped - before} <= ${DAILY_CAP["Фермер"]})`);
+  assert(capped - before <= DAILY_CAP[ROLE_FARMER],
+    `farmer respects the daily cap (${capped - before} <= ${DAILY_CAP[ROLE_FARMER]})`);
 
   // A new in-game day should let him work again
   world._absoluteTime += 24000;
@@ -240,7 +240,7 @@ console.log("\n=== miner balance ===");
     if (st) { total += st.amount; kinds.add(st.typeId); }
   }
   assert(total > 0, `miner produces something over a day (${total})`);
-  assert(total <= DAILY_CAP["Шахтёр"] + 3,
+  assert(total <= DAILY_CAP[ROLE_MINER] + 3,
     `miner output stays within the daily cap, so player mining still matters (${total})`);
   assert([...kinds].every((k) => ["minecraft:iron_ingot", "minecraft:gold_ingot", "minecraft:redstone", "minecraft:lapis_lazuli"].includes(k)),
     `miner only yields smelted/refined goods (${[...kinds].join(", ")})`);

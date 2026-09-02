@@ -3,6 +3,8 @@ import {
   DAILY_CAP,
   STORAGE_CAP,
   MINER_TABLE,
+  ROLE_FARMER,
+  ROLE_MINER,
   startProductionLoop,
   workerDailyCap,
   workerStorageCap
@@ -27,20 +29,20 @@ function workerAtTier(tier) {
 }
 
 console.log("\n=== absolute production caps ===");
-assert(DAILY_CAP["Фермер"] === 12, "farmer daily constant is 12");
-assert(STORAGE_CAP["Фермер"] === 64, "farmer storage constant is 64");
-assert(DAILY_CAP["Шахтёр"] === 6, "miner daily constant is 6");
-assert(STORAGE_CAP["Шахтёр"] === 32, "miner storage constant is 32");
+assert(DAILY_CAP[ROLE_FARMER] === 12, "farmer daily constant is 12");
+assert(STORAGE_CAP[ROLE_FARMER] === 64, "farmer storage constant is 64");
+assert(DAILY_CAP[ROLE_MINER] === 6, "miner daily constant is 6");
+assert(STORAGE_CAP[ROLE_MINER] === 32, "miner storage constant is 32");
 
 for (let tier = 0; tier <= 5; tier++) {
   const worker = workerAtTier(tier);
-  assert(workerDailyCap(worker, "Фермер") === 12, `farmer tier ${tier} keeps daily cap 12`);
-  assert(workerStorageCap(worker, "Фермер") === 64, `farmer tier ${tier} keeps storage cap 64`);
-  assert(workerDailyCap(worker, "Шахтёр") === 6, `miner tier ${tier} keeps daily cap 6`);
-  assert(workerStorageCap(worker, "Шахтёр") === 32, `miner tier ${tier} keeps storage cap 32`);
+  assert(workerDailyCap(worker, ROLE_FARMER) === 12, `farmer tier ${tier} keeps daily cap 12`);
+  assert(workerStorageCap(worker, ROLE_FARMER) === 64, `farmer tier ${tier} keeps storage cap 64`);
+  assert(workerDailyCap(worker, ROLE_MINER) === 6, `miner tier ${tier} keeps daily cap 6`);
+  assert(workerStorageCap(worker, ROLE_MINER) === 32, `miner tier ${tier} keeps storage cap 32`);
 }
-assert(workerDailyCap(workerAtTier(99), "Неизвестный") === 0, "unknown role has no daily production cap");
-assert(workerStorageCap(workerAtTier(-1), "Неизвестный") === 0, "unknown role has no storage production cap");
+assert(workerDailyCap(workerAtTier(99), "unknown_role") === 0, "unknown role has no daily production cap");
+assert(workerStorageCap(workerAtTier(-1), "unknown_role") === 0, "unknown role has no storage production cap");
 
 console.log("\n=== miner pool ===");
 const allowedMinerPool = new Set([

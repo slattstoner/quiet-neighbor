@@ -137,13 +137,37 @@ export const SPATIAL_PLAN = Object.freeze([
   planEntry({ level: 12, buildingId: "granary_yard", bounds: rect(8, 36, 48, 66), roadLink: { type: "service_path", axis: "side", width: 2 }, note: "Storage, threshing and cart yard; no production-cap increase." }),
   planEntry({ level: 13, buildingId: "travellers_inn", bounds: rect(40, 66, -42, -18), roadLink: { type: "service_path", axis: "forward", width: 2 }, note: "Inn, stable and service yard." }),
   planEntry({ level: 14, buildingId: "guard_barracks", bounds: rect(-66, -44, -40, -18), roadLink: { type: "service_path", axis: "forward", width: 2 }, note: "Barracks and drill yard." }),
-  planEntry({ level: 15, buildingId: "village_archive", bounds: rect(-18, -4, 46, 62), roadLink: { type: "service_path", axis: "side", width: 2 }, note: "Archive and map court; this level expands the existing castle wall to R94." }),
-  planEntry({ level: 16, buildingId: "ranger_lodge", bounds: rect(-66, -42, 46, 66), roadLink: { type: "service_path", axis: "side", width: 2 }, note: "Isolated ranger lodge and nursery/woodlot." }),
-  planEntry({ level: 17, buildingId: "mercy_infirmary", bounds: rect(40, 66, 44, 66), roadLink: { type: "service_path", axis: "side", width: 2 }, note: "Isolated infirmary and herb garden." }),
-  planEntry({ level: 18, buildingId: "engineer_workshop", bounds: rect(40, 66, -66, -46), roadLink: { type: "service_path", axis: "side", width: 2 }, note: "Isolated engineer workshop and enclosed test yard." }),
-  planEntry({ level: 19, buildingId: "commons_infrastructure", bounds: rect(-66, -42, -66, -44), roadLink: { type: "service_path", axis: "forward", width: 2 }, note: "Green, well and shared utility court." }),
-  planEntry({ level: 20, buildingId: "grand_council_hall", bounds: rect(16, 36, 22, 42), roadLink: { type: "civic_path", axis: "side", width: 2 }, note: "Final council hall and civic court." })
+  planEntry({ level: 15, buildingId: "village_archive", bounds: rect(-18, -4, 46, 62), roadLink: { type: "service_path", axis: "side", width: 2 }, note: "Archive and map court; this level expands the existing castle wall to R94." })
 ]);
+
+/**
+ * L16-20 are deliberately NOT in SPATIAL_PLAN.
+ *
+ * They were, once - as five reservations for `ranger_lodge`,
+ * `mercy_infirmary`, `engineer_workshop`, `commons_infrastructure` and
+ * `grand_council_hall`. None of those five was ever built. By the time the
+ * L16-20 runtime landed, its buildings were `memorial_grove`,
+ * `village_infirmary`, `civic_workshop`, `founders_hall` and
+ * `village_beacon`, on entirely different ground - and the last two old names
+ * are on progression_16_20.js's explicit forbidden list, so the rename was
+ * settled, not pending.
+ *
+ * That left five rectangles reserving ground for buildings that will never
+ * exist, and because both L16-20 validators check `spec.bounds` against every
+ * SPATIAL_PLAN rect, the buildings that DO exist had to route around them.
+ * The reservations were pure obstruction.
+ *
+ * Each L16-20 building now owns its own bounds beside its builder
+ * (`SPECIAL_BUILDINGS` in special_buildings_16_18.js, `FINAL_CITY_BUILDINGS`
+ * in final_city_19_20.js), which is also where its entry, connector and
+ * interior geometry live - one place per building instead of two that can
+ * drift. What SPATIAL_PLAN is the authority on is L1-15, and only that.
+ *
+ * The invariant those reservations were supposed to protect - that no two
+ * allocations anywhere overlap - is not lost: it is asserted across both
+ * modules at once in tests/extension_allocations.mjs, which is a stronger
+ * check than the old one, since the old rects never matched what got built.
+ */
 
 export const CANONICAL_BUILDING_IDS = Object.freeze(SPATIAL_PLAN.map((entry) => entry.buildingId));
 

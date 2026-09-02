@@ -40,8 +40,14 @@ function captureWarnings(run) {
 
 const dim = __test__.makeDimension();
 
-/** A wheat field of `count` fully grown plants, with a barrel beside it. */
-function makeFarm(origin, count) {
+/**
+ * A wheat field of `count` fully grown plants, with a barrel beside it.
+ *
+ * `naming` decides how the farmer is identified: "roleId" is how npc.js
+ * actually spawns one today, "legacyName" is a villager from a world saved
+ * before that property existed, and "both" is the overlap.
+ */
+function makeFarm(origin, count, naming = "both") {
   const barrel = dim.getBlock({ x: origin.x + 1, y: origin.y, z: origin.z });
   barrel.setType("minecraft:barrel");
   for (let i = 0; i < count; i++) {
@@ -49,7 +55,8 @@ function makeFarm(origin, count) {
       .setPermutation(BlockPermutation.resolve("minecraft:wheat", { growth: 7 }));
   }
   const farmer = dim.spawnEntity("minecraft:villager_v2", { x: origin.x, y: origin.y, z: origin.z });
-  farmer.nameTag = "§bФермер§r";
+  if (naming === "legacyName" || naming === "both") farmer.nameTag = "§bФермер§r";
+  if (naming === "roleId" || naming === "both") farmer.setDynamicProperty("village:roleId", "farmer");
   farmer.addTag("village_worker");
   return { farmer, container: barrel.getComponent("minecraft:inventory").container };
 }
@@ -105,6 +112,34 @@ console.log("\n=== a full barrel never spends the day's quota ===");
     `a harvest with nowhere to go does not count against the quota (${before} -> ${after})`);
   assert(countOf(full.container, "minecraft:wheat") === 0,
     "and no wheat was conjured into a container that had no room");
+}
+
+// ---------- роль читается из village:roleId, а не из имени ----------
+console.log("\n=== a worker is identified by its role id, not its display name ===");
+{
+  // How npc.js actually spawns a farmer today: a coloured name tag *and*
+  // village:roleId. The name tag is user-facing text, so nothing may depend on
+  // its exact spelling - this farmer has no recognisable name at all.
+  const renamed = makeFarm({ x: 600, y: 70, z: 600 }, 3, "roleId");
+  renamed.farmer.nameTag = "§bМарта-пряха§r";
+  captureWarnings(() => tick());
+  assert(countOf(renamed.container, "minecraft:wheat") === 1,
+    `a farmer whose name was changed keeps working (${countOf(renamed.container, "minecraft:wheat")} wheat)`);
+
+  // And a villager from a world saved before village:roleId existed is still
+  // recognised, so the change cannot strand an existing save.
+  const legacy = makeFarm({ x: 800, y: 70, z: 800 }, 3, "legacyName");
+  assert(legacy.farmer.getDynamicProperty("village:roleId") === undefined,
+    "the legacy farmer really has no role id");
+  captureWarnings(() => tick());
+  assert(countOf(legacy.container, "minecraft:wheat") === 1,
+    `a pre-roleId farmer is still recognised by name (${countOf(legacy.container, "minecraft:wheat")} wheat)`);
+
+  // A villager with neither is not a worker and must be left alone.
+  const stranger = makeFarm({ x: 1000, y: 70, z: 1000 }, 3, "none");
+  captureWarnings(() => tick());
+  assert(countOf(stranger.container, "minecraft:wheat") === 0,
+    "a tagged villager with no role at all produces nothing");
 }
 
 console.log(failures === 0 ? "\nALL PRODUCTION RUNTIME CHECKS PASSED" : `\n${failures} PRODUCTION RUNTIME CHECK(S) FAILED`);

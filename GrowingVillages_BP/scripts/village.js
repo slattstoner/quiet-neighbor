@@ -16,6 +16,7 @@ import { paletteAt, paletteById } from "./palettes.js";
 import { spawnCraftsman, spawnResident, spawnGateGolem, spawnTowerGuard, setHome } from "./npc.js";
 import { ensureVillageChapterState, setVillageChapterForLevel } from "./chapter_state.js";
 import { buildCityConnector } from "./city_connectors.js";
+import { registerVillage } from "./village_registry.js";
 import {
   DEFAULT_PALETTE_ID,
   PROP_CHEST_X, PROP_CHEST_Y, PROP_CHEST_Z,
@@ -190,6 +191,10 @@ export function foundVillage(player, rawOrigin, facing, requestedPaletteId) {
     console.warn("[village] initial sign failed: " + e);
   }
 
+  // And into the world index, so anything can find this village later without
+  // the elder being loaded.
+  publishToRegistry(elder, { id, origin, palette: palette.id }, 1);
+
   return elder;
 }
 
@@ -243,6 +248,30 @@ export function refreshSign(elder) {
     tier: elder.getDynamicProperty(PROP_TIER) || 0,
     maxLevel: maxLevelForLayoutVersion(state.layoutVersion)
   });
+}
+
+/**
+ * Publishes this village to the world registry.
+ *
+ * Called at founding and after every level-up, so the index is correct without
+ * anyone having to remember to update it separately. Deliberately fail-safe:
+ * the registry is an index, and a village that exists but is not indexed is a
+ * far smaller problem than a level-up that aborts because an index write
+ * failed. registerVillage() is idempotent per village id, so calling it again
+ * on every level updates the record rather than adding a second one.
+ */
+function publishToRegistry(elder, state, level) {
+  try {
+    registerVillage({
+      id: state.id,
+      x: state.origin.x,
+      z: state.origin.z,
+      level: level ?? state.level,
+      palette: state.palette
+    });
+  } catch (error) {
+    console.warn("[village] registry publish failed: " + error);
+  }
 }
 
 export function getVillageState(elder) {
@@ -568,6 +597,7 @@ function tryCityLevelUp(elder, state, nextLevel, cfg, check, options) {
   try { refreshSign(elder); } catch (error) {
     console.warn("[village] sign refresh failed: " + error);
   }
+  publishToRegistry(elder, state, nextLevel);
   return {
     done: true, leveledUpTo: nextLevel, label: cfg.label, shape, connector, chapterId,
     cityBuildingId: buildingId,
@@ -739,6 +769,7 @@ export function tryLevelUp(elder, options) {
   } catch (e) {
     console.warn("[village] sign refresh failed: " + e);
   }
+  publishToRegistry(elder, state, nextLevel);
 
   return {
     done: true,

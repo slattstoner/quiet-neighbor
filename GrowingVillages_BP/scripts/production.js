@@ -27,18 +27,55 @@ const MINER_TABLE = [
   { typeId: "minecraft:lapis_lazuli", weight: 3, max: 2 }
 ];
 
+/**
+ * Roles are identified by a stable id, never by the villager's display name.
+ *
+ * These caps used to be keyed by the Russian name tag ("Фермер"), and the
+ * production loop picked a worker's job by string-comparing `nameTag` against
+ * it. That made the entire production system depend on the exact spelling of
+ * a piece of user-facing text: renaming a villager - to another language, or
+ * just to another Russian word - silently stopped the farmer and the miner
+ * working, with no error anywhere.
+ *
+ * npc.js already writes `village:roleId` at spawn for exactly this purpose.
+ */
+export const ROLE_FARMER = "farmer";
+export const ROLE_MINER = "miner";
+
 const DAILY_CAP = {
-  "Фермер": 12,   // wheat
-  "Шахтёр": 6     // total smelted items
+  [ROLE_FARMER]: 12,   // wheat
+  [ROLE_MINER]: 6      // total smelted items
 };
 
 const STORAGE_CAP = {
-  "Фермер": 64,
-  "Шахтёр": 32
+  [ROLE_FARMER]: 64,
+  [ROLE_MINER]: 32
 };
+
+/**
+ * Display names of the two working roles, as they were written before
+ * `village:roleId` existed. Kept only to recognise workers in worlds saved
+ * before that property was introduced - never to decide anything new.
+ */
+const LEGACY_NAME_TO_ROLE = Object.freeze({
+  "Фермер": ROLE_FARMER,
+  "Шахтёр": ROLE_MINER
+});
 
 function plainName(entity) {
   return (entity.nameTag || "").replace(/§./g, "");
+}
+
+/** A worker's stable role id, falling back to its name tag for old saves. */
+export function roleOf(worker) {
+  let stored;
+  try {
+    stored = worker?.getDynamicProperty?.("village:roleId");
+  } catch (error) {
+    stored = undefined;
+  }
+  if (typeof stored === "string" && DAILY_CAP[stored] !== undefined) return stored;
+  return LEGACY_NAME_TO_ROLE[plainName(worker)] || null;
 }
 
 /** Resets a worker's daily counter when a new in-game day starts. */
@@ -132,8 +169,8 @@ function runFarmer(farmer) {
   // where capped wheat is stored, never how much wheat can be produced.
   const container = findStorage(farmer, 8 + tier * 5);
   if (!container) return;
-  if (countInContainer(container, "minecraft:wheat") >= workerStorageCap(farmer, "Фермер")) return;
-  if (producedToday(farmer) >= workerDailyCap(farmer, "Фермер")) return;
+  if (countInContainer(container, "minecraft:wheat") >= workerStorageCap(farmer, ROLE_FARMER)) return;
+  if (producedToday(farmer) >= workerDailyCap(farmer, ROLE_FARMER)) return;
   if (!hasSpace(container)) return;
 
   const R = 12;
@@ -186,7 +223,7 @@ function runFarmer(farmer) {
         // mode (every ES module is strict) - swallowed by the loop's catch, so
         // it never surfaced, but it made the line below unreachable.
         actionsRemaining--;
-        if (actionsRemaining <= 0 || producedToday(farmer) >= workerDailyCap(farmer, "Фермер")) return;
+        if (actionsRemaining <= 0 || producedToday(farmer) >= workerDailyCap(farmer, ROLE_FARMER)) return;
       }
     }
   }
@@ -211,8 +248,8 @@ function runMiner(miner) {
   // This mirrors the farmer's convenience-only radius: it cannot raise output.
   const container = findStorage(miner, 8 + tier * 3);
   if (!container) return;
-  if (producedToday(miner) >= workerDailyCap(miner, "Шахтёр")) return;
-  if (countInContainer(container) >= workerStorageCap(miner, "Шахтёр")) return;
+  if (producedToday(miner) >= workerDailyCap(miner, ROLE_MINER)) return;
+  if (countInContainer(container) >= workerStorageCap(miner, ROLE_MINER)) return;
   if (!hasSpace(container)) return;
 
   // Only actually produce on some cycles, so output feels like slow work
@@ -220,7 +257,7 @@ function runMiner(miner) {
 
   const entry = pickWeighted(MINER_TABLE);
   const amount = Math.min(
-    workerDailyCap(miner, "Шахтёр") - producedToday(miner),
+    workerDailyCap(miner, ROLE_MINER) - producedToday(miner),
     1 + Math.floor(Math.random() * entry.max)
   );
   if (amount <= 0) return;
@@ -245,9 +282,9 @@ export function startProductionLoop() {
       try {
         if (!worker.isValid) continue;
         checkDayRollover(worker);
-        const role = plainName(worker);
-        if (role === "Фермер") runFarmer(worker);
-        else if (role === "Шахтёр") runMiner(worker);
+        const role = roleOf(worker);
+        if (role === ROLE_FARMER) runFarmer(worker);
+        else if (role === ROLE_MINER) runMiner(worker);
       } catch (e) {
         // Keep the other workers running, but say something: this catch used
         // to be silent, and it hid a "Assignment to constant variable" thrown
