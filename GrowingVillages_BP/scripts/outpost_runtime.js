@@ -18,7 +18,9 @@ export const CHARTER_RANGE = 160;
 
 const BUILT_PREFIX = "village:outpost:";
 
-function builtKey(slotId) { return BUILT_PREFIX + slotId; }
+// Exported because waypoints.js needs the same key: the mod's rule is that a
+// dynamic-property key string lives in one place, never duplicated.
+export function builtKey(slotId) { return BUILT_PREFIX + slotId; }
 
 function outpostState(elder) {
   const origin = readOrigin(elder);

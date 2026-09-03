@@ -14,6 +14,7 @@ import { SURVEY_CHARTER_ID, CHARTER_RANGE, charterMessage, useSurveyCharter } fr
 import { reportMissingStructures } from "./structure_build.js";
 import { startOnboarding } from "./onboarding.js";
 import { startLivestockLoop } from "./livestock.js";
+import { startWaypointLoop } from "./waypoints.js";
 
 const ORACLE_BELL_ID = "village:oracle_bell";
 const LEVEL_BELL_TARGETS = new Map([
@@ -183,5 +184,6 @@ system.run(() => {
   startQuarterLoop();
   startPatrolLoop();
   startLivestockLoop();
+  startWaypointLoop();
   world.sendMessage("§7[Growing Villages] бета загружена.");
 });
