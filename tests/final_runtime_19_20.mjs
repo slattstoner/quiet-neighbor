@@ -1,3 +1,4 @@
+import { DAILY_CAP, STORAGE_CAP } from "./scripts/production.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { ItemStack, __test__ } from "@minecraft/server";
@@ -333,8 +334,15 @@ console.log("\n=== module ownership boundaries ===");
   }
   const ui = source("../GrowingVillages_BP/scripts/ui.js");
   assert(ui.includes("final_runtime_19_20.js"), "ui.js reaches L19-20 only through its coordinator");
-  const production = source("../GrowingVillages_BP/scripts/production.js");
-  assert(production.includes("12") && production.includes("6"), "production caps module is untouched by this stage");
+  // This used to be `production.includes("12") && production.includes("6")`,
+  // which passes for any file containing those two digits anywhere and so
+  // asserted nothing at all. The caps themselves are what must not move: the
+  // standing rule is that the village never out-earns the player's own farming
+  // and mining, and a stage that quietly raised a cap would break it.
+  assert(DAILY_CAP.farmer === 12 && DAILY_CAP.miner === 6,
+    `the daily caps are untouched by this stage (farmer ${DAILY_CAP.farmer}, miner ${DAILY_CAP.miner})`);
+  assert(STORAGE_CAP.farmer === 64 && STORAGE_CAP.miner === 32,
+    `and so are the storage caps (farmer ${STORAGE_CAP.farmer}, miner ${STORAGE_CAP.miner})`);
 }
 
 console.log(failures === 0

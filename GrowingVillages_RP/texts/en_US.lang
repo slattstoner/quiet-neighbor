@@ -1,7 +1,6 @@
 ## Growing Villages - EN
 item.village:oracle_bell.name=Village Oracle Bell
 item.village:survey_charter.name=Survey Charter
-itemGroup.name.bell=Bell
 
 pack.name=Growing Villages [BETA] - Resources
 pack.description=Resource pack for the Growing Villages mod.

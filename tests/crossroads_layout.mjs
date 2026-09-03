@@ -110,18 +110,25 @@ const shedBox = (key) => {
   return { fMin: at.forward - 3, fMax: at.forward + 3, sMin: at.side - 3, sMax: at.side + 3 };
 };
 const shedKeys = ["alchemist", "oldtimer", "ranger", "healer", "engineer"];
+let shedCollisions = 0;
 for (const key of shedKeys) {
   const box = shedBox(key);
   assert(!touchesRoadAxis(box), `${key} shed: clear of both road arms`);
   assert(insideRadius(box, PERIMETER_SCHEDULE[0].radius - 1), `${key} shed: inside the R44 palisade that stands when it unlocks`);
   for (const entry of SPATIAL_PLAN) {
-    if (overlap(box, entry.bounds)) assert(false, `${key} shed overlaps ${entry.buildingId}`);
+    if (overlap(box, entry.bounds)) { shedCollisions++; assert(false, `${key} shed overlaps ${entry.buildingId}`); }
   }
   for (let level = 2; level <= 10; level++) {
-    if (overlap(box, houseBox(plotPlacementFor(level, LAYOUT_V2), 7, 7))) assert(false, `${key} shed overlaps the level-${level} house`);
+    if (overlap(box, houseBox(plotPlacementFor(level, LAYOUT_V2), 7, 7))) {
+      shedCollisions++; assert(false, `${key} shed overlaps the level-${level} house`);
+    }
   }
 }
-assert(true, "special sheds overlap no planned plot and no numbered house");
+// This was `assert(true, ...)`, which printed "ok" even on the run where the
+// loop above had just failed - a summary line that could contradict the
+// failures directly over it.
+assert(shedCollisions === 0,
+  `special sheds overlap no planned plot and no numbered house (${shedCollisions} collisions)`);
 
 // ---------------------------------------------------------------- 6
 console.log("\n=== quarters: free ground that really is free ===");

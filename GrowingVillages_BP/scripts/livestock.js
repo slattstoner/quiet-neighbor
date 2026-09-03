@@ -3,7 +3,10 @@ import { toWorld } from "./util.js";
 import { FARM_PENS, penYardBounds } from "./upgrades.js";
 import { findVillageElder } from "./npc.js";
 import { resolveCraftsmanRole } from "./craftsman_quests.js";
-import { isUsableFacing, isUsableOrigin, readFacing, readOrigin, readProperty } from "./village_state.js";
+import {
+  PROP_PLOT_FORWARD, PROP_PLOT_SIDE, PROP_UPGRADE_TIER,
+  isUsableFacing, isUsableOrigin, readFacing, readOrigin, readProperty
+} from "./village_state.js";
 
 /**
  * Keeps the farmer's pens populated.
@@ -98,11 +101,11 @@ export function countInPen(dimension, box, species) {
  * Returns what it did, so the loop and the tests see the same answer.
  */
 export function restockFarm(dimension, farmer, elder, options) {
-  const tier = Number(readProperty(farmer, "village:upgradeTier") || 0);
+  const tier = Number(readProperty(farmer, PROP_UPGRADE_TIER) || 0);
   if (tier < FARM_PENS[0].tier) return { ok: false, reason: "no_pens_yet", tier };
 
-  const plotForward = readProperty(farmer, "village:plotForward");
-  const side = readProperty(farmer, "village:plotSide");
+  const plotForward = readProperty(farmer, PROP_PLOT_FORWARD);
+  const side = readProperty(farmer, PROP_PLOT_SIDE);
   if (!Number.isFinite(plotForward) || !Number.isFinite(side)) return { ok: false, reason: "missing_plot" };
 
   const origin = readOrigin(elder);

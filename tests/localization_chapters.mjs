@@ -1,3 +1,5 @@
+import { MAX_BETA_LEVEL } from "./scripts/levels.js";
+import { chapterForLevel } from "./scripts/quest_contract_v2.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { buildChapterJournalModel, JOURNAL_KEYS } from "./scripts/chapter_journal.js";
@@ -73,6 +75,26 @@ assert([...required].every((key) => !/\s/.test(key)), "journal localisation refe
 console.log("\n=== localisation content scope ===");
 assert(!ruJournalKeys.some((key) => /chapter\.1[1-5]\./.test(key)),
   "journal localisation does not present levels 11-15 as active beta UI");
+
+// The other half of that statement, which nothing asserted: text must exist
+// for every level the journal can actually reach. Together the two say "the
+// chapters with text are exactly the chapters that are live".
+//
+// This matters because chapter_journal.js builds its keys by interpolation -
+// `growing_villages.chapter.${chapterId}.title` - and the ratchet's
+// key-existence scan only sees whole string literals, so a chapter with no
+// text at all is invisible to it. Raising MAX_BETA_LEVEL by one currently
+// turns the chronicle into raw key text with no test objecting; now one does.
+for (let level = 1; level <= MAX_BETA_LEVEL; level++) {
+  const chapter = chapterForLevel(level);
+  assert(!!chapter, `level ${level} has a chapter`);
+  if (!chapter) continue;
+  for (const part of ["title", "intro"]) {
+    const key = `growing_villages.chapter.${chapter.id}.${part}`;
+    assert(ru.has(key) && en.has(key),
+      `level ${level} (${chapter.id}) has ${part} text in both languages`);
+  }
+}
 const unsupportedPromise = /reward|turn[- ]?in|service|наград|сдат[ьё]|услуг/i;
 assert(!ruActiveJournalKeys.some((key) => unsupportedPromise.test(ru.get(key)) || unsupportedPromise.test(en.get(key))),
   "active journal/chapter texts do not promise rewards, turn-ins or services");

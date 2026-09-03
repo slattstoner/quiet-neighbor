@@ -253,7 +253,26 @@ console.log("\n=== recipes name real items and gate nothing behind themselves ==
   // one would let a player skip the entire progression.
   const testBells = [...declared].filter((id) => /oracle_bell_level_\d+$/.test(id));
   assert(testBells.length === 10, `all ten level-test bells exist (${testBells.length})`);
-  for (const bell of testBells) assert(!results.has(bell), `${bell} stays creative-only, with no recipe`);
+  for (const bell of testBells) assert(!results.has(bell), `${bell} has no recipe`);
+
+  // Having no recipe is not enough. These ten found a village instantly at
+  // level N, they all reuse the real bell's icon, and they sat in the same
+  // creative category as it - so the creative menu showed eleven identical
+  // bells, ten of which skip the entire progression. "category": "none" is the
+  // documented way to keep an item out of the creative inventory while /give
+  // still works, which is exactly what a developer tool wants.
+  for (const file of itemFiles) {
+    const item = JSON.parse(readFileSync(`${BP}/items/${file}`, "utf8"))["minecraft:item"];
+    const id = item.description.identifier;
+    const category = item.description.menu_category?.category;
+    assert(!!category, `${file}: declares a creative category`);
+    if (/oracle_bell_level_\d+$/.test(id)) {
+      assert(category === "none",
+        `${id} is hidden from the creative inventory (category "${category}")`);
+    } else {
+      assert(category !== "none", `${id} is something a player can actually find (${category})`);
+    }
+  }
 }
 
 // ---------- 4. манифесты ----------

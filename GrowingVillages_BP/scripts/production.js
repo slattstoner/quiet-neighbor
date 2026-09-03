@@ -1,5 +1,6 @@
 import { world, system, ItemStack } from "@minecraft/server";
 import { probeGround } from "./terrain.js";
+import { PROP_UPGRADE_TIER } from "./village_state.js";
 
 /**
  * PRODUCTION BALANCE
@@ -101,7 +102,7 @@ function addProduced(entity, n) {
 // weights or miner entry maxima. Minecraft exploration and player gathering remain
 // the main source.
 function upgradeTier(worker) {
-  return Math.min(2, worker.getDynamicProperty("village:upgradeTier") || 0);
+  return Math.min(2, worker.getDynamicProperty(PROP_UPGRADE_TIER) || 0);
 }
 
 // Absolute economy contract: these values do not scale with quest upgrades.

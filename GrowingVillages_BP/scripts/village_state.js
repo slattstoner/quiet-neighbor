@@ -30,6 +30,19 @@ export const PROP_CHEST_Z = "village:chestZ";
 export const PROP_LAYOUT_VERSION = "village:layoutVersion";
 export const PROP_TIER = "village:tier";
 
+/**
+ * The craftsman/worker keys, for the same reason as the elder's above.
+ *
+ * These sat as bare literals in four modules at once - upgrades.js, village.js,
+ * production.js and livestock.js - which is precisely the drift this module
+ * exists to prevent. livestock.js was the newest offender and the one that
+ * made it obvious: a rename would have left the restock loop reading a key
+ * nobody writes any more, and the pens would have quietly stopped filling.
+ */
+export const PROP_UPGRADE_TIER = "village:upgradeTier";
+export const PROP_PLOT_FORWARD = "village:plotForward";
+export const PROP_PLOT_SIDE = "village:plotSide";
+
 export const DEFAULT_PALETTE_ID = "plains";
 
 /** getDynamicProperty that never throws, for callers reading a foreign entity. */

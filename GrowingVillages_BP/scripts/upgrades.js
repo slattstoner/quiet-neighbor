@@ -2,7 +2,14 @@ import { setBlock, setBlockMulti, toWorld } from "./util.js";
 import { prepareSite } from "./terrain.js";
 import { paletteMats, farmerPatchOuterEdge } from "./builder.js";
 import { writeSign } from "./signboard.js";
-import { readFacing, readOrigin, readPaletteId } from "./village_state.js";
+import {
+  PROP_PLOT_FORWARD,
+  PROP_PLOT_SIDE,
+  PROP_UPGRADE_TIER,
+  readFacing,
+  readOrigin,
+  readPaletteId
+} from "./village_state.js";
 import { resolveCraftsmanRole } from "./craftsman_quests.js";
 
 const PLUS_SIDE_COMPASS = ["south", "north", "east", "west"];
@@ -507,11 +514,11 @@ function buildMinerYard(dimension, origin, facing, plotForward, side, tier) {
  */
 export function applyCraftsmanUpgrade(npc, elder, upgrade) {
   if (!npc || !elder || !upgrade) return { ok: false, reason: "missing_context" };
-  const current = npc.getDynamicProperty("village:upgradeTier") || 0;
+  const current = npc.getDynamicProperty(PROP_UPGRADE_TIER) || 0;
   if (current >= upgrade.tier) return { ok: true, alreadyApplied: true, tier: current };
 
-  const plotForward = npc.getDynamicProperty("village:plotForward");
-  const side = npc.getDynamicProperty("village:plotSide");
+  const plotForward = npc.getDynamicProperty(PROP_PLOT_FORWARD);
+  const side = npc.getDynamicProperty(PROP_PLOT_SIDE);
   if (plotForward === undefined || side === undefined) return { ok: false, reason: "missing_plot" };
 
   const { origin, facing } = elderState(elder);
@@ -540,7 +547,7 @@ export function applyCraftsmanUpgrade(npc, elder, upgrade) {
     } else {
       return { ok: false, reason: "unknown_profession" };
     }
-    npc.setDynamicProperty("village:upgradeTier", upgrade.tier);
+    npc.setDynamicProperty(PROP_UPGRADE_TIER, upgrade.tier);
     return { ok: true, tier: upgrade.tier, label: upgrade.label };
   } catch (e) {
     console.warn("[village] craftsman upgrade failed: " + e);

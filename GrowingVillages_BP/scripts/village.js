@@ -19,10 +19,20 @@ import { buildCityConnector } from "./city_connectors.js";
 import { registerVillage } from "./village_registry.js";
 import {
   DEFAULT_PALETTE_ID,
-  PROP_CHEST_X, PROP_CHEST_Y, PROP_CHEST_Z,
-  PROP_FACING, PROP_ID, PROP_LAYOUT_VERSION, PROP_LEVEL,
-  PROP_ORIGIN_X, PROP_ORIGIN_Y, PROP_ORIGIN_Z,
-  PROP_PALETTE, PROP_TIER
+  PROP_CHEST_X,
+  PROP_CHEST_Y,
+  PROP_CHEST_Z,
+  PROP_FACING,
+  PROP_ID,
+  PROP_LAYOUT_VERSION,
+  PROP_LEVEL,
+  PROP_ORIGIN_X,
+  PROP_ORIGIN_Y,
+  PROP_ORIGIN_Z,
+  PROP_PALETTE,
+  PROP_PLOT_FORWARD,
+  PROP_PLOT_SIDE,
+  PROP_TIER
 } from "./village_state.js";
 
 const CITY_BUILD_PREFIX = "village:v2:build:";
@@ -711,8 +721,8 @@ export function tryLevelUp(elder, options) {
           cfg.npc.professionName, state.id, homeRadius);
         // The plot reference makes a quest upgrade deterministic even when
         // several villages and professions are loaded in the same world.
-        npc.setDynamicProperty("village:plotForward", placement.plotForward);
-        npc.setDynamicProperty("village:plotSide", placement.side);
+        npc.setDynamicProperty(PROP_PLOT_FORWARD, placement.plotForward);
+        npc.setDynamicProperty(PROP_PLOT_SIDE, placement.side);
         // Workers (farmer, miner) run the production loop; pure traders don't
         if (cfg.npc.worker) npc.addTag("village_worker");
         return npc;

@@ -42,6 +42,7 @@ console.log("=== the sites stay outside the wall, forever ===");
   assert(new Set(OUTPOST_ORDER).size === OUTPOST_ORDER.length, "no village ends up with four abandoned mines");
   for (const kind of OUTPOST_ORDER) assert(!!OUTPOST_KINDS[kind], `${kind}: has a builder`);
 
+  let siteCollisions = 0;
   for (const slot of OUTPOST_SLOTS) {
     const b = boundsOf(slot);
     const nearest = Math.min(Math.abs(b.fMin), Math.abs(b.fMax), Math.abs(b.sMin), Math.abs(b.sMax));
@@ -54,21 +55,25 @@ console.log("=== the sites stay outside the wall, forever ===");
     assert(!overlap(b, ROAD_AXES.forward.bounds) && !overlap(b, ROAD_AXES.side.bounds), `${slot.id}: clear of both road arms`);
     for (const planned of SPATIAL_PLAN) {
       for (const envelope of [planned.bounds, ...planned.reserveEnvelopes.map((r) => r.bounds)]) {
-        if (overlap(b, envelope)) assert(false, `${slot.id} overlaps ${planned.buildingId}`);
+        if (overlap(b, envelope)) { siteCollisions++; assert(false, `${slot.id} overlaps ${planned.buildingId}`); }
       }
     }
     for (const quarter of QUARTER_SLOTS) {
-      if (overlap(b, quarter.bounds)) assert(false, `${slot.id} overlaps the ${quarter.id} district plot`);
+      if (overlap(b, quarter.bounds)) { siteCollisions++; assert(false, `${slot.id} overlaps the ${quarter.id} district plot`); }
     }
   }
   for (let i = 0; i < OUTPOST_SLOTS.length; i++) {
     for (let j = i + 1; j < OUTPOST_SLOTS.length; j++) {
       if (overlap(boundsOf(OUTPOST_SLOTS[i]), boundsOf(OUTPOST_SLOTS[j]))) {
+        siteCollisions++;
         assert(false, `${OUTPOST_SLOTS[i].id} overlaps ${OUTPOST_SLOTS[j].id}`);
       }
     }
   }
-  assert(true, "no site overlaps the village, its districts, its roads or another site");
+  // Was assert(true, ...): it reported success even when the loops above had
+  // just failed. The count is what makes the summary mean something.
+  assert(siteCollisions === 0,
+    `no site overlaps the village, its districts, its roads or another site (${siteCollisions} collisions)`);
 }
 
 // ---------------------------------------------------------------- 2
