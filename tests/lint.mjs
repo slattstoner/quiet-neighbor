@@ -188,12 +188,35 @@ console.log("\n=== non-existent block identifiers ===");
     "minecraft:oak_fence_gate": "minecraft:fence_gate",
     "minecraft:oak_pressure_plate": "minecraft:wooden_pressure_plate",
     "minecraft:oak_standing_sign": "minecraft:standing_sign",
+    // A valid ITEM, but not a valid block - see ITEM_VALID_BLOCK_INVALID below.
+    "minecraft:oak_sign": "minecraft:standing_sign",
     "minecraft:stonecutter": "minecraft:stonecutter_block",
     "minecraft:bricks": "minecraft:brick_block",
     "minecraft:terracotta": "minecraft:hardened_clay",
     "minecraft:oak_door": "minecraft:wooden_door",
     "minecraft:stone_slab": "minecraft:smooth_stone_slab"
   };
+  /**
+   * Ids that are a real ITEM but not a real BLOCK.
+   *
+   * This distinction cost a false positive to learn. The now-deleted
+   * HANDOVER_CURRENT.md recorded Minecraft on iPhone logging both
+   * "minecraft:oak_door not found" and "minecraft:oak_sign not found", so
+   * oak_sign looked like a second missing id that nothing here covered.
+   * It is not: `minecraft:oak_sign` is in the official item enum (alongside
+   * spruce_sign, cherry_sign and the rest), and the L16 "Roots of the Road"
+   * quest legitimately asks for four of them. What does not exist is the
+   * *block* - that is `minecraft:standing_sign` - so the device warning came
+   * from a placement, not from the quest.
+   *
+   * A purely textual scan cannot tell a placement from a quest requirement,
+   * so for this category the item-carrying keys are skipped. Getting it wrong
+   * either way is bad: flagging the quest breaks a green suite over working
+   * code, and not scanning at all lets a real bad placement through.
+   */
+  const ITEM_VALID_BLOCK_INVALID = new Set(["minecraft:oak_sign"]);
+  const ITEM_CONTEXT = /\b(itemId|rewardItem|resultItem)\s*:/;
+
   const files = readdirSync(SCRIPTS).filter((f) => f.endsWith(".js"));
   let offenders = 0;
   for (const file of files) {
@@ -202,6 +225,7 @@ console.log("\n=== non-existent block identifiers ===");
       // Comments explaining a past fix legitimately name the dead id.
       if (/^\s*(\/\/|\*)/.test(line)) continue;
       for (const [bad, good] of Object.entries(WRONG_BLOCK_IDS)) {
+        if (ITEM_VALID_BLOCK_INVALID.has(bad) && ITEM_CONTEXT.test(line)) continue;
         // Exact id match: "minecraft:bricks" must not match "minecraft:brick_block",
         // and "minecraft:stonecutter" must not match "minecraft:stonecutter_block".
         if (new RegExp(`"${bad}"`).test(line)) {
