@@ -9,3 +9,6 @@ tests/scripts/
 # OS / editor junk
 .DS_Store
 Thumbs.db
+
+# Build output
+dist/
