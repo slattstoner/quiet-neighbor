@@ -36,8 +36,11 @@
 - `GrowingVillages_BP/` — behavior pack (скрипты в `scripts/`, предметы в `items/`)
 - `GrowingVillages_RP/` — resource pack (текстуры, тексты)
 - `tests/` — эмулятор Bedrock Script API на Node.js и наборы тестов
-- `HANDOVER.md` — полная передача контекста проекта (архитектура, грабли, баланс)
-- `RELEASE_NOTES_0.10.0.md` — что изменилось в 0.6.0 → 0.10.0 и почему
+- `tools/build.mjs` — сборка `.mcaddon` (`node tools/build.mjs`, выход в `dist/`)
+- `HANDOVER.md` — полная передача контекста проекта (архитектура, грабли,
+  баланс, сборка, установка на устройство)
+- `ROADMAP_20_FEATURES.md` — двадцать фишек, разбитые по релизам, и что уже сделано
+- `RELEASE_NOTES_0.12.0.md` — текущий релиз; рядом заметки к 0.11.0 и 0.10.0
 
 ## Разработка
 
