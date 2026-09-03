@@ -155,11 +155,59 @@ function commonMetadata(entry, bounds, shape, slots) {
   };
 }
 
+/**
+ * A job-site block under each market stall.
+ *
+ * The stalls were pure scenery: six canopies with nothing under them. In
+ * Bedrock a villager's day is built out of points of interest - it claims a
+ * job site, works it in the daytime and gathers at the bell in the evening
+ * (behavior.mingle) - so a market with no job sites is a market nobody has
+ * any reason to stand in. Six blocks turn it into somewhere the village
+ * actually goes.
+ *
+ * Every id here is one this pack already places elsewhere, which is the point:
+ * `minecraft:stonecutter` and `minecraft:oak_door` both shipped once as
+ * plausible-looking ids that do not exist, and util.js swallows the throw, so
+ * a wrong id here would be six invisible stalls and no error anywhere.
+ *
+ * Deliberately NOT here: beds. A villager claims a bed as its *home*, and the
+ * market square is a public plaza - beds belong in the houses, which is where
+ * the house builders already put them. Six beds in the middle of the market
+ * would make the square a dormitory and quietly move the whole village's
+ * sleeping quarters into it.
+ *
+ * What a test can check is that the blocks are placed, that they sit under the
+ * canopies and inside the square's own plot, and that the metadata agrees with
+ * what was built. Whether vanilla's AI then does the thing it is documented to
+ * do needs a device, and is called out as such in HANDOVER.md.
+ */
+const STALL_TRADES = Object.freeze([
+  "minecraft:smoker",              // butcher
+  "minecraft:loom",                // shepherd
+  "minecraft:cartography_table",   // cartographer
+  "minecraft:fletching_table",     // fletcher
+  "minecraft:cauldron",            // leatherworker
+  "minecraft:grindstone"           // weaponsmith
+]);
+
+/** The centre of a canopy, where its job-site block goes. */
+function stallCentre(stall) {
+  return { f: Math.min(stall.fMin, stall.fMax) + 1, s: Math.min(stall.sMin, stall.sMax) + 1, up: 0 };
+}
+
 function buildMarketSquare(placer, entry, bounds) {
   placer.box(bounds.fMin, bounds.sMin, -1, bounds.fMax, bounds.sMax, -1, "minecraft:gravel");
   const materials = { floor: "minecraft:oak_planks", post: "minecraft:oak_log", roof: "minecraft:oak_stairs", roofCore: "minecraft:oak_planks" };
   const stalls = [];
   for (const s of [7, 17]) for (const f of [-41, -37, -33]) stalls.push(canopy(placer, f, f + 2, s, s + 2, materials));
+  // A canopy is a 3x3 floor with four corner posts, so its centre is free and
+  // already under a roof - which is exactly where a stallholder would stand.
+  const stallWorkstations = stalls.map((stall, index) => {
+    const at = stallCentre(stall);
+    const typeId = STALL_TRADES[index % STALL_TRADES.length];
+    placer.block(at.f, at.s, at.up, typeId);
+    return { ...at, typeId };
+  });
   // A stone water feature remains in the open middle, with benches around it.
   placer.box(-37, 11, -1, -35, 15, -1, "minecraft:stone_bricks");
   placer.box(-36, 12, -1, -36, 14, -1, "minecraft:water");
@@ -184,7 +232,9 @@ function buildMarketSquare(placer, entry, bounds) {
     roofSpecs: [...stalls.map((stall) => ({ ...stall, wallTop: 2 })), { ...kiosk, wallTop: 3 }]
   }, {
     npcAnchor: { f: -32, s: 13, up: 0 }, beds: [], storage: [{ f: -32, s: 14, up: 0, typeId: "minecraft:barrel" }],
-    workstations: [{ f: -32, s: 12, up: 0, typeId: "minecraft:composter" }],
+    // The kiosk's composter plus one per stall, so the recorded POI list is
+    // what was actually built rather than a subset of it.
+    workstations: [{ f: -32, s: 12, up: 0, typeId: "minecraft:composter" }, ...stallWorkstations],
     lights: [{ f: -32, s: 15, up: 2 }, { f: -41, s: 7, up: 3 }, { f: -37, s: 17, up: 3 }, { f: -33, s: 7, up: 3 }, { f: -31, s: 19, up: 3 }]
   });
 }

@@ -160,6 +160,78 @@ for (let facing = 0; facing < 4; facing++) {
 }
 
 assert(__test__.entities.length === entitiesBefore, "city builders spawn no NPCs or entities before integration");
+
+// ---------------------------------------------------------------- market POI
+console.log("\n=== the market stalls are somewhere the village can actually work ===");
+{
+  /**
+   * Feature 10: a villager's day in Bedrock is assembled out of points of
+   * interest - it claims a job site, works it in daylight, and gathers at the
+   * bell in the evening. The six market canopies were pure scenery with
+   * nothing underneath, so the market was somewhere nobody had any reason to
+   * stand. A job-site block under each turns it into a destination.
+   *
+   * What is checked here is what a test can honestly check: the blocks exist,
+   * they are real ids, they sit under the canopies and inside the square's own
+   * reservation, and the recorded POI list matches what was built. Whether
+   * vanilla's AI then walks there is a device question, and HANDOVER.md says so.
+   */
+  const origin = { x: 970000, y: 70, z: 0 };
+  const built = buildCityBuilding("market_square", dim, origin, 0);
+
+  const stalls = built.workstations.filter((slot) => slot.typeId !== "minecraft:composter");
+  assert(stalls.length === 6, `one job site per stall (${stalls.length})`);
+  assert(new Set(stalls.map((slot) => slot.typeId)).size === 6,
+    "six different trades, so the stalls are not six of the same thing");
+
+  // Every id must be one the engine knows. These are all ids this pack already
+  // places elsewhere - the point being that `minecraft:stonecutter` and
+  // `minecraft:oak_door` both shipped once looking just as plausible, and
+  // util.js swallows the throw, so a wrong id here is an invisible stall.
+  const REAL_JOB_SITES = new Set([
+    "minecraft:smoker", "minecraft:loom", "minecraft:cartography_table",
+    "minecraft:fletching_table", "minecraft:cauldron", "minecraft:grindstone",
+    "minecraft:composter", "minecraft:barrel", "minecraft:blast_furnace",
+    "minecraft:smithing_table", "minecraft:stonecutter_block", "minecraft:lectern",
+    "minecraft:brewing_stand"
+  ]);
+  for (const slot of stalls) {
+    assert(REAL_JOB_SITES.has(slot.typeId), `${slot.typeId} is a real vanilla job-site block`);
+  }
+
+  // Inside the square's own plot, or the market would be reserving ground it
+  // does not own - the failure mode SPATIAL_PLAN exists to prevent.
+  for (const slot of stalls) {
+    assert(slot.f >= built.bounds.fMin && slot.f <= built.bounds.fMax &&
+           slot.s >= built.bounds.sMin && slot.s <= built.bounds.sMax,
+      `the ${slot.typeId} stands inside the square (f=${slot.f}, s=${slot.s})`);
+  }
+
+  // Under a canopy, not out in the open: a canopy is a 3x3 with corner posts,
+  // so a job site on a corner would be inside a post.
+  const canopyCorners = [];
+  for (const s of [7, 17]) for (const f of [-41, -37, -33]) {
+    for (const cf of [f, f + 2]) for (const cs of [s, s + 2]) canopyCorners.push({ f: cf, s: cs });
+  }
+  for (const slot of stalls) {
+    assert(!canopyCorners.some((corner) => corner.f === slot.f && corner.s === slot.s),
+      `the ${slot.typeId} is not inside a roof post (f=${slot.f}, s=${slot.s})`);
+  }
+
+  // And the declared list has to match the blocks that were really placed,
+  // or the metadata is a promise the build did not keep.
+  for (const slot of stalls) {
+    const at = toWorld(origin, 0, slot.f, slot.s, slot.up);
+    const placed = dim.getBlock(at)?.permutation?.typeId;
+    assert(placed === slot.typeId,
+      `${slot.typeId} was really placed where the metadata says (found ${placed})`);
+  }
+
+  // No beds. A villager claims a bed as its home, and this is a public plaza -
+  // beds belong in the houses, where the house builders already put them.
+  assert(built.beds.length === 0, `the market square is not a dormitory (${built.beds.length} beds)`);
+}
+
 console.log(failures === 0
   ? `\nALL CITY 11–15 TESTS PASSED (${checks} checks)`
   : `\n${failures} CITY 11–15 TEST(S) FAILED out of ${checks} checks`);
