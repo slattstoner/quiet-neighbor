@@ -397,8 +397,9 @@ console.log("\n=== the pack does not sit on top of an already-released version =
       "GrowingVillages_BP", "GrowingVillages_RP"]) || "") : "";
     const drifted = changed.split("\n").filter(Boolean);
     for (const file of drifted) console.error(`  ${file} changed after ${notes} shipped`);
-    assert(drifted.length === 0,
-      `nothing landed on top of the released ${version} (${drifted.length} files; bump the version)`);
+    assert(drifted.length === 0, drifted.length === 0
+      ? `nothing landed on top of the released ${version}`
+      : `${drifted.length} file(s) changed after ${version} shipped - bump the version`);
   }
 }
 
