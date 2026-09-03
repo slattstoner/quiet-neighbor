@@ -1,0 +1,7 @@
+# Git cannot track an empty directory, and structures/README.md tells authors to
+# export their .mcstructure files into exactly this path. Without this file the
+# path does not exist in a fresh clone and step 3 of that guide points nowhere.
+#
+# The namespace matters: Bedrock derives a structure's id from the first folder
+# under structures/, so a file saved here is "gv:buildings/<name>" - which is
+# what BUILDING_MANIFEST records expect. Delete this once real structures land.
