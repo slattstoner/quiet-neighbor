@@ -1,6 +1,6 @@
 import { buildTownHall, buildCampfire, buildPlainHouse, interiorCenter, townHallFittings } from "./builder.js";
 import { toWorld, setBlock, randomId, coloredName, COLORS, VILLAGER_TYPE, ADULT_SPAWN_OPTIONS } from "./util.js";
-import { ItemStack, system } from "@minecraft/server";
+import { ItemStack, system, world } from "@minecraft/server";
 import {
   LEVELS, MAX_BETA_LEVEL, runLevelBuild, fullVillageMaxForward, isCityLevel,
   maxLevelForLayoutVersion, builtPlotFootprints, plotPlacementFor, plotSiteBoundsFor,
@@ -9,8 +9,8 @@ import {
 import { buildFortifications, perimeterFor } from "./walls.js";
 import { buildDefenceStageJob, clearStageRingJob, planDefenceStage, previousDefenceStage } from "./defences_roads.js";
 import { assignPatrol } from "./patrol.js";
-import { standingDiscountFor } from "./contracts.js";
-import { generateVillageName, updateGateSign } from "./signboard.js";
+import { contractView, standingDiscountFor } from "./contracts.js";
+import { generateVillageName, updateGateSign, updateSquareBoard } from "./signboard.js";
 import { holdLoadedArea, prepareSite, sampleGroundLevel, withLoadedArea, withRetry } from "./terrain.js";
 import { paletteAt, paletteById } from "./palettes.js";
 import { spawnCraftsman, spawnResident, spawnGateGolem, spawnTowerGuard, setHome } from "./npc.js";
@@ -252,12 +252,28 @@ export function refreshSign(elder) {
   // four, and the wall it hangs on moves outward at levels 5/8/10/15, so the
   // radius has to be asked for rather than assumed to be the legacy R48.
   const gateForward = villageRadiusFor(state.level, state.layoutVersion);
-  return updateGateSign(elder.dimension, state.origin, state.facing, gateForward, {
+  const gateSign = updateGateSign(elder.dimension, state.origin, state.facing, gateForward, {
     name: elder.getDynamicProperty("village:name") || "Деревня",
     level: state.level,
     tier: elder.getDynamicProperty(PROP_TIER) || 0,
     maxLevel: maxLevelForLayoutVersion(state.layoutVersion)
   });
+
+  // The square's notice board rides the same refresh, so the two never
+  // disagree. It is a separate try/catch on purpose: a village founded before
+  // the board existed has no post on its plaza, and failing to raise one must
+  // not stop the gate sign - which every level-up depends on - from updating.
+  try {
+    const plaza = state.layoutVersion === LAYOUT_VERSION_V2
+      ? V2_FOUNDING.campfire
+      : { plotForward: -6, side: undefined };
+    updateSquareBoard(elder.dimension, state.origin, state.facing,
+      plaza.plotForward, plaza.side, contractView(elder, world.getDay()));
+  } catch (error) {
+    console.warn("[village] could not refresh the square board: " + error);
+  }
+
+  return gateSign;
 }
 
 /**
